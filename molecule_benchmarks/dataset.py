@@ -1,5 +1,4 @@
-
-
+import itertools
 from pathlib import Path
 from typing import Optional, TypeVar
 from rdkit import Chem
@@ -7,12 +6,35 @@ import requests
 import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm  # type: ignore
-
+import random
+import csv
 
 class SmilesDataset:
     
     @classmethod
-    def load_guacamole_dataset(cls):
+    def load_qm9_dataset(cls, subset_size: Optional[int] = None):
+        """Load the QM9 dataset."""
+        ds_url = "https://huggingface.co/datasets/n0w0f/qm9-csv/resolve/main/qm9_dataset.csv"
+        response = requests.get(ds_url)
+        response.raise_for_status()
+        smiles = []
+        
+        reader = csv.DictReader(response.text.splitlines())
+        if subset_size is not None:
+            reader = itertools.islice(reader, subset_size)
+
+        for row in reader:
+            smiles.append(row["smiles"])  # Assuming the column name is "smiles"
+        #smiles = canonicalize_smiles_list(smiles)
+        random.seed(42)  # For reproducibility
+        random.shuffle(smiles)
+        num_train = int(0.8 * len(smiles))
+        train_smiles = smiles[:num_train]
+        validation_smiles = smiles[num_train:]
+        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+
+    @classmethod
+    def load_guacamol_dataset(cls):
         """Load the Guacamole dataset."""
         train_ds_url = "https://ndownloader.figshare.com/files/13612760"
         validation_ds_url = "https://ndownloader.figshare.com/files/13612766"
@@ -24,28 +46,30 @@ class SmilesDataset:
         response.raise_for_status()
         validation_smiles = response.text.splitlines()
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
-    
-    
+
     @classmethod
     def load_dummy_dataset(cls):
         """Load a dummy dataset for testing purposes."""
         train_smiles = ["C1=CC=CC=C1", "C1=CC=CN=C1", "C1=CC=CO=C1"]
         validation_smiles = ["C1=CC=CC=C1", "C1=CC=CN=C1"]
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
-    
-    def __init__(self, train_smiles: list[str] | Path | str, validation_smiles: list[str] | Path | str) -> None:
+
+    def __init__(
+        self,
+        train_smiles: list[str] | Path | str,
+        validation_smiles: list[str] | Path | str,
+    ) -> None:
         self.train_smiles = load_smiles(train_smiles)
         self.validation_smiles = load_smiles(validation_smiles)
-    
-    
+
     def get_train_smiles(self) -> list[str]:
         """Get the training SMILES."""
         return self.train_smiles
-    
+
     def get_validation_smiles(self) -> list[str]:
         """Get the validation SMILES."""
         return self.validation_smiles
-    
+
     def get_train_molecules(self) -> list[Chem.Mol | None]:
         """Get the training molecules."""
         return [Chem.MolFromSmiles(s) for s in self.train_smiles]
@@ -55,7 +79,7 @@ class SmilesDataset:
         return [Chem.MolFromSmiles(s) for s in self.validation_smiles]
 
 
-def load_smiles(smiles: list[str] | str | Path)-> list[str]:
+def load_smiles(smiles: list[str] | str | Path) -> list[str]:
     """Load SMILES from a file or a list. Canonicalizes the SMILES strings."""
     if isinstance(smiles, str):
         smiles = Path(smiles)
@@ -77,12 +101,11 @@ def _canonicalize_single_smiles(smiles: Optional[str]) -> Optional[str]:
         try:
             return Chem.CanonSmiles(smiles)
         except Exception:
-            return None
+            return smiles
     return None
 
-def canonicalize_smiles_list(
-    smiles: list[T], n_jobs: Optional[int] = None
-) -> list[Optional[str]]:
+
+def canonicalize_smiles_list(smiles: list[T], n_jobs: Optional[int] = None) -> list[T]:
     """Canonicalize a list of SMILES strings using multiprocessing with progress tracking."""
 
     if n_jobs is None:

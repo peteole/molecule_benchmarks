@@ -39,11 +39,18 @@ class DummyMoleculeGenerationModel(MoleculeGenerationModel):
     """
     A dummy model that generates a fixed set of SMILES strings for testing purposes.
     """
-
-    def generate_molecule_batch(self) -> list[str | None]:
-        return [
+    def __init__(self, mols = [
             "C1=CC=CC=C1",  # Benzene
             "C1=CC=CN=C1",  # Pyridine
             "C1=CC=CO=C1",  # Furan
             None,           # Invalid SMILES
-        ]
+        ]):
+        """
+        Initialize the dummy model with a predefined list of SMILES strings.
+        Args:
+            mols: A list of SMILES strings to use for generation.
+        """
+        self.mols = mols
+
+    def generate_molecule_batch(self) -> list[str | None]:
+        return self.mols

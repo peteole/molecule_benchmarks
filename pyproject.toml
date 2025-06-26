@@ -12,6 +12,7 @@ dependencies = [
     "rdkit>=2025.3.3",
     "rdkit-stubs>=0.8",
     "requests>=2.32.4",
+    "scipy>=1.16.0",
     "tqdm>=4.67.1",
 ]
 

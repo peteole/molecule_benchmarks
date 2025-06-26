@@ -165,6 +165,7 @@ dependencies = [
     { name = "rdkit" },
     { name = "rdkit-stubs" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "tqdm" },
 ]
 
@@ -180,6 +181,7 @@ requires-dist = [
     { name = "rdkit", specifier = ">=2025.3.3" },
     { name = "rdkit-stubs", specifier = ">=0.8" },
     { name = "requests", specifier = ">=2.32.4" },
+    { name = "scipy", specifier = ">=1.16.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
