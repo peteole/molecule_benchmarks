@@ -1,0 +1,112 @@
+
+
+from pathlib import Path
+from typing import Optional, TypeVar
+from rdkit import Chem
+import requests
+import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
+from tqdm import tqdm  # type: ignore
+
+
+class SmilesDataset:
+    
+    @classmethod
+    def load_guacamole_dataset(cls):
+        """Load the Guacamole dataset."""
+        train_ds_url = "https://ndownloader.figshare.com/files/13612760"
+        validation_ds_url = "https://ndownloader.figshare.com/files/13612766"
+        # download the dataset into memory
+        response = requests.get(train_ds_url)
+        response.raise_for_status()
+        train_smiles = response.text.splitlines()
+        response = requests.get(validation_ds_url)
+        response.raise_for_status()
+        validation_smiles = response.text.splitlines()
+        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+    
+    
+    @classmethod
+    def load_dummy_dataset(cls):
+        """Load a dummy dataset for testing purposes."""
+        train_smiles = ["C1=CC=CC=C1", "C1=CC=CN=C1", "C1=CC=CO=C1"]
+        validation_smiles = ["C1=CC=CC=C1", "C1=CC=CN=C1"]
+        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+    
+    def __init__(self, train_smiles: list[str] | Path | str, validation_smiles: list[str] | Path | str) -> None:
+        self.train_smiles = load_smiles(train_smiles)
+        self.validation_smiles = load_smiles(validation_smiles)
+    
+    
+    def get_train_smiles(self) -> list[str]:
+        """Get the training SMILES."""
+        return self.train_smiles
+    
+    def get_validation_smiles(self) -> list[str]:
+        """Get the validation SMILES."""
+        return self.validation_smiles
+    
+    def get_train_molecules(self) -> list[Chem.Mol | None]:
+        """Get the training molecules."""
+        return [Chem.MolFromSmiles(s) for s in self.train_smiles]
+
+    def get_validation_molecules(self) -> list[Chem.Mol | None]:
+        """Get the validation molecules."""
+        return [Chem.MolFromSmiles(s) for s in self.validation_smiles]
+
+
+def load_smiles(smiles: list[str] | str | Path)-> list[str]:
+    """Load SMILES from a file or a list. Canonicalizes the SMILES strings."""
+    if isinstance(smiles, str):
+        smiles = Path(smiles)
+    if isinstance(smiles, Path):
+        with smiles.open("r") as f:
+            smiles = f.readlines()
+    smiles = [s.strip() for s in smiles if s.strip()]
+    canonicalized_smiles = canonicalize_smiles_list(smiles)
+    # Filter out None values that couldn't be canonicalized
+    return [s for s in canonicalized_smiles if s is not None]
+
+
+T = TypeVar("T", str, Optional[str])
+
+
+def _canonicalize_single_smiles(smiles: Optional[str]) -> Optional[str]:
+    """Helper function to canonicalize a single SMILES string for multiprocessing."""
+    if smiles is not None:
+        try:
+            return Chem.CanonSmiles(smiles)
+        except Exception:
+            return None
+    return None
+
+def canonicalize_smiles_list(
+    smiles: list[T], n_jobs: Optional[int] = None
+) -> list[Optional[str]]:
+    """Canonicalize a list of SMILES strings using multiprocessing with progress tracking."""
+
+    if n_jobs is None:
+        n_jobs = mp.cpu_count()
+
+    # Handle empty list
+    if not smiles:
+        return []
+
+    # For small lists, use serial processing
+    if len(smiles) < 100:
+        return [
+            _canonicalize_single_smiles(s)  # type: ignore
+            for s in tqdm(smiles, desc="Canonicalizing SMILES")
+        ]
+
+    # Use multiprocessing for larger lists
+    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        results = list(
+            tqdm(
+                executor.map(_canonicalize_single_smiles, smiles),
+                total=len(smiles),
+                desc="Canonicalizing SMILES",
+            )
+        )
+
+    return results
