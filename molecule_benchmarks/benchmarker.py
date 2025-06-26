@@ -209,6 +209,6 @@ class Benchmarker:
         # Each KL divergence value is transformed to be in [0, 1].
         # Then their average delivers the final score.
         partial_scores = [np.exp(-score) for score in kldivs.values()]
-        score = sum(partial_scores) / len(partial_scores)
+        score = float(sum(partial_scores) / len(partial_scores))
         print("KL divergence score:", score)
         return score
