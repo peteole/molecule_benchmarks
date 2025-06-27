@@ -53,6 +53,26 @@ class SmilesDataset:
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
+    def load_moses_dataset(cls, fraction: float = 1.0):
+        """Load the Moses dataset."""
+        def download_smiles(split: str) -> list[str]:
+            """Download SMILES from a given URL split."""
+            url = f"https://media.githubusercontent.com/media/molecularsets/moses/master/data/{split}.csv"
+            response = requests.get(url)
+            response.raise_for_status()
+            csv_file = response.text.splitlines()
+            if fraction < 1.0:
+                # Sample a fraction of the dataset
+                csv_file = [csv_file[0]] + random.sample(csv_file[1:], int(len(csv_file) * fraction))
+            reader = csv.DictReader(csv_file)
+            smiles = [row["SMILES"] for row in reader]
+            return smiles
+
+        train_smiles = download_smiles("train")
+        validation_smiles = download_smiles("test")
+        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+
+    @classmethod
     def load_dummy_dataset(cls):
         """Load a dummy dataset for testing purposes."""
         train_smiles = ["C1=CC=CC=C1", "C1=CC=CN=C1", "C1=CC=CO=C1"]

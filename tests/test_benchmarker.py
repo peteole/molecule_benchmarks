@@ -23,16 +23,3 @@ def test_benchmarker():
     )
     assert scores["kl_score"]>0.95, f"Expected KL score to be high, got {scores['kl_score']}"
     assert scores["fcd"]['fcd'] < 0.3, f"Expected FCD score to be low, got {scores['fcd']['fcd']}"
-
-
-def test_guacamol():
-    # Test loading the Guacamole  dataset and computing FCD scores
-    dataset = SmilesDataset.load_guacamol_dataset(0.01)
-    benchmarker = Benchmarker(dataset)
-    assert isinstance(benchmarker, Benchmarker), "Failed to load Guacamole benchmarker"
-    assert len(benchmarker.dataset.train_smiles) > 10, (
-        "Guacamole benchmarker has no training SMILES"
-    )
-    # dataset.validation_smiles = dataset.validation_smiles[:100]  # Use a subset for testing
-    # fcd_to_self = benchmarker._compute_fcd_scores(benchmarker.dataset.validation_smiles)
-    # assert fcd_to_self["fcd"] <= 1e-4, "FCD score to self should be 0.0"

@@ -1,11 +1,11 @@
 from molecule_benchmarks import moses_metrics as mm
 
 def test_moses():
-    print(mm.fingerprint("CCO"))
+    # print(mm.fingerprint("CCO"))
     fps1 = mm.fingerprints(["CCO", "CCN"])
     fps2 = mm.fingerprints(["CCO", "CO"])
-    print(fps1)
-    print(fps2)
+    # print(fps1)
+    # print(fps2)
     print(mm.average_agg_tanimoto(fps1, fps2))
     print(mm.average_agg_tanimoto(fps1, fps1))
 
