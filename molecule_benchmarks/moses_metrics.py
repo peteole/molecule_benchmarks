@@ -1,13 +1,17 @@
 from functools import partial
+from collections import Counter
 import numpy as np
 import scipy
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import MACCSkeys
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
+from rdkit.Chem import AllChem
+from rdkit.Chem.Scaffolds import MurckoScaffold
 import torch
 from multiprocessing import Pool
 from pathlib import Path
+from scipy.spatial.distance import cosine as cos_distance
 
 
 class SNNMetric:
@@ -267,3 +271,69 @@ def internal_diversity(
             average_agg_tanimoto(gen_fps, gen_fps, agg="mean", device=device, p=p)
         ).mean()
     )
+
+
+def compute_scaffolds(mol_list, n_jobs=1, min_rings=2):
+    """
+    Extracts a scafold from a molecule in a form of a canonic SMILES
+    """
+    scaffolds = Counter()
+    map_ = mapper(n_jobs)
+    scaffolds = Counter(
+        map_(partial(compute_scaffold, min_rings=min_rings), mol_list))
+    if None in scaffolds:
+        scaffolds.pop(None)
+    return scaffolds
+
+
+def get_n_rings(mol: Chem.Mol) -> int:
+    """
+    Computes the number of rings in a molecule
+    """
+    return mol.GetRingInfo().NumRings()
+
+def compute_scaffold(mol, min_rings=2):
+    mol = get_mol(mol)
+    try:
+        scaffold = MurckoScaffold.GetScaffoldForMol(mol)
+    except (ValueError, RuntimeError):
+        return None
+    n_rings = get_n_rings(scaffold)
+    scaffold_smiles = Chem.MolToSmiles(scaffold)
+    if scaffold_smiles == '' or n_rings < min_rings:
+        return None
+    return scaffold_smiles
+
+def cos_similarity(ref_counts, gen_counts):
+    """
+    Computes cosine similarity between
+     dictionaries of form {name: count}. Non-present
+     elements are considered zero:
+
+     sim = <r, g> / ||r|| / ||g||
+    """
+    if len(ref_counts) == 0 or len(gen_counts) == 0:
+        return np.nan
+    keys = np.unique(list(ref_counts.keys()) + list(gen_counts.keys()))
+    ref_vec = np.array([ref_counts.get(k, 0) for k in keys])
+    gen_vec = np.array([gen_counts.get(k, 0) for k in keys])
+    return 1 - cos_distance(ref_vec, gen_vec)
+
+
+def fragmenter(mol):
+    """
+    fragment mol using BRICS and return smiles list
+    """
+    fgs = AllChem.FragmentOnBRICSBonds(get_mol(mol))
+    fgs_smi = Chem.MolToSmiles(fgs).split(".")
+    return fgs_smi
+
+
+def compute_fragments(mol_list, n_jobs=1):
+    """
+    fragment list of mols using BRICS and return smiles list
+    """
+    fragments = Counter()
+    for mol_frag in mapper(n_jobs)(fragmenter, mol_list):
+        fragments.update(mol_frag)
+    return fragments

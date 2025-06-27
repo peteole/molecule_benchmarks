@@ -7,7 +7,7 @@ from molecule_benchmarks.dataset import SmilesDataset, canonicalize_smiles_list
 from molecule_benchmarks.model import MoleculeGenerationModel
 from molecule_benchmarks.utils import calculate_internal_pairwise_similarities, calculate_pc_descriptors, continuous_kldiv, discrete_kldiv
 import numpy as np
-from molecule_benchmarks.moses_metrics import average_agg_tanimoto, fingerprints, mapper, mol_passes_filters, internal_diversity
+from molecule_benchmarks.moses_metrics import average_agg_tanimoto, compute_scaffolds, cos_similarity, fingerprints, mapper, mol_passes_filters, internal_diversity, compute_fragments
 
 
 class ValidityBenchmarkResults(TypedDict):
@@ -38,7 +38,15 @@ class MosesBenchmarkResults(TypedDict):
     fraction_passing_moses_filters: float
     "Fraction of generated SMILES that pass the Moses filters (https://arxiv.org/abs/1811.12823)."
     snn_score: float
-    "SNN score from Moses (https://arxiv.org/abs/1811.12823). In [0,1]."
+    "Similarity to a nearest neighbor (SNN) score from Moses (https://arxiv.org/abs/1811.12823). In [0,1], higher is better."
+    IntDiv: float
+    "Internal diversity score from Moses with p=1"
+    IntDiv2: float
+    "Internal diversity score from Moses with p=2"
+    scaffolds_similarity: float
+    "Scaffolds similarity metric from Moses. In [0,1], higher is better."
+    fragment_similarity: float
+    "Fragment similarity metric from Moses. In [0,1], higher is better."
 
 class BenchmarkResults(TypedDict):
     """Combined benchmark results."""
@@ -89,6 +97,10 @@ class Benchmarker:
         moses_results: MosesBenchmarkResults = {
             "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(generated_smiles),
             "snn_score": self.get_snn_score(generated_smiles),
+            "IntDiv": float(internal_diversity(generated_smiles, p=1)),
+            "IntDiv2": float(internal_diversity(generated_smiles, p=2)),
+            "scaffolds_similarity": self.compute_scaffold_similarity(generated_smiles),
+            "fragment_similarity": self.compute_fragment_similarity(generated_smiles),
         }
 
         return {"validity": validity_results, "fcd": fcd_results, "kl_score": kl_score, "moses": moses_results}
@@ -244,3 +256,17 @@ class Benchmarker:
         """Compute the fraction of generated SMILES that pass the Moses filters."""
         passes = mapper(1)(mol_passes_filters, generated_smiles)
         return float(np.mean(passes))
+
+    def compute_scaffold_similarity(self, generated_smiles: list[str | None]):
+        """Compute the scaffold similarity of the generated SMILES."""
+        valid_smiles = [s for s in generated_smiles if s is not None and is_valid_smiles(s)]
+        train_scaffolds = compute_scaffolds(self.dataset.get_train_smiles())
+        generated_scaffolds = compute_scaffolds(valid_smiles)
+        return float(cos_similarity(train_scaffolds, generated_scaffolds))
+    
+    def compute_fragment_similarity(self, generated_smiles: list[str | None]) -> float:
+        """Compute the fragment similarity of the generated SMILES."""
+        valid_smiles = [s for s in generated_smiles if s is not None and is_valid_smiles(s)]
+        train_fragments = compute_fragments(self.dataset.get_train_molecules())
+        generated_fragments = compute_fragments(valid_smiles)
+        return float(cos_similarity(train_fragments, generated_fragments))
