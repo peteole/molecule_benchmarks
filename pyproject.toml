@@ -26,12 +26,13 @@ dependencies = [
     "requests>=2.32.4",
     "scipy>=1.16.0",
     "tqdm>=4.67.1",
+    "torchmetrics>=1.0.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/peteole/molecule_benchmarks"
 Issues = "https://github.com/peteole/molecule_benchmarks/issues"
-Documentation = "https://github.com/peteole/molecule_benchmarks#readme"
+Documentation = "https://molecule-benchmarks.readthedocs.io/"
 
 [project.scripts]
 molecule-benchmarks = "molecule_benchmarks:main"
@@ -45,6 +46,11 @@ dev = [
     "pytest>=8.4.1",
     "ruff>=0.12.1",
     "types-requests>=2.32.4.20250611",
+]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=3.0.2",
+    "sphinx-autobuild>=2021.3.14",
 ]
 
 [tool.pytest.ini_options]
