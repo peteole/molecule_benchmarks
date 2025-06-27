@@ -107,7 +107,7 @@ def fingerprints(smiles_mols_array, n_jobs=1, already_unique=False, *args, **kwa
             first_fp = fp
             break
     fps = [
-        fp if fp is not None else np.array([np.NaN]).repeat(length)[None, :]
+        fp if fp is not None else np.array([np.nan]).repeat(length)[None, :]
         for fp in fps
     ]
     if scipy.sparse.issparse(first_fp):

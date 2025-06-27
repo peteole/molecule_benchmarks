@@ -13,7 +13,7 @@ from tqdm import tqdm  # type: ignore
 
 class SmilesDataset:
     @classmethod
-    def load_qm9_dataset(cls, subset_size: Optional[int] = None):
+    def load_qm9_dataset(cls, max_train_samples: Optional[int] = None):
         """Load the QM9 dataset."""
         ds_url = (
             "https://huggingface.co/datasets/n0w0f/qm9-csv/resolve/main/qm9_dataset.csv"
@@ -23,21 +23,27 @@ class SmilesDataset:
         smiles = []
 
         reader = csv.DictReader(response.text.splitlines())
-        if subset_size is not None:
-            reader = itertools.islice(reader, subset_size)
 
         for row in reader:
             smiles.append(row["smiles"])  # Assuming the column name is "smiles"
         # smiles = canonicalize_smiles_list(smiles)
         random.seed(42)  # For reproducibility
         random.shuffle(smiles)
-        num_train = int(0.8 * len(smiles))
-        train_smiles = smiles[:num_train]
-        validation_smiles = smiles[num_train:]
+        fraction = 1.0
+        num_train_samples = int(len(smiles) * 0.8)
+        num_val_samples = len(smiles) - num_train_samples
+        if max_train_samples is not None:
+            max_train_samples = min(max_train_samples, int(len(smiles) * 0.8))
+            fraction = max_train_samples / num_train_samples
+            num_train_samples =  int(max_train_samples)
+            num_val_samples = int(num_val_samples * fraction)
+            
+        train_smiles = smiles[:num_train_samples]
+        validation_smiles = smiles[num_train_samples : num_train_samples + num_val_samples]
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
-    def load_guacamol_dataset(cls, fraction: float = 1.0):
+    def load_guacamol_dataset(cls, max_train_samples: Optional[int] = None):
         """Load the Guacamole dataset."""
         train_ds_url = "https://ndownloader.figshare.com/files/13612760"
         validation_ds_url = "https://ndownloader.figshare.com/files/13612766"
@@ -46,21 +52,20 @@ class SmilesDataset:
         response.raise_for_status()
         train_smiles = response.text.splitlines()
         random.seed(42)  # For reproducibility
-        if fraction < 1.0:
-            train_smiles = random.sample(
-                train_smiles, int(len(train_smiles) * fraction)
-            )
         response = requests.get(validation_ds_url)
         response.raise_for_status()
         validation_smiles = response.text.splitlines()
-        if fraction < 1.0:
+        if max_train_samples is not None:
+            max_train_samples = min(max_train_samples, len(train_smiles))
+            fraction = max_train_samples / len(train_smiles)
+            train_smiles = random.sample(train_smiles, max_train_samples)
             validation_smiles = random.sample(
                 validation_smiles, int(len(validation_smiles) * fraction)
             )
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
-    def load_moses_dataset(cls, fraction: float = 1.0):
+    def load_moses_dataset(cls, max_train_samples: Optional[int] = None):
         """Load the Moses dataset."""
 
         def download_smiles(split: str) -> list[str]:
@@ -69,17 +74,20 @@ class SmilesDataset:
             response = requests.get(url)
             response.raise_for_status()
             csv_file = response.text.splitlines()
-            if fraction < 1.0:
-                # Sample a fraction of the dataset
-                csv_file = [csv_file[0]] + random.sample(
-                    csv_file[1:], int(len(csv_file) * fraction)
-                )
             reader = csv.DictReader(csv_file)
             smiles = [row["SMILES"] for row in reader]
             return smiles
 
         train_smiles = download_smiles("train")
         validation_smiles = download_smiles("test")
+        random.seed(42)  # For reproducibility
+        if max_train_samples is not None:
+            max_train_samples = min(max_train_samples, len(train_smiles))
+            fraction = max_train_samples / len(train_smiles)
+            train_smiles = random.sample(train_smiles, max_train_samples)
+            validation_smiles = random.sample(
+                validation_smiles, int(len(validation_smiles) * fraction)
+            )
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
@@ -112,6 +120,13 @@ class SmilesDataset:
     def get_validation_molecules(self) -> list[Chem.Mol | None]:
         """Get the validation molecules."""
         return [Chem.MolFromSmiles(s) for s in self.validation_smiles]
+    
+    def __repr__(self) -> str:
+        """String representation of the dataset."""
+        return (
+            f"SmilesDataset(train_size={len(self.train_smiles)}, "
+            f"validation_size={len(self.validation_smiles)})"
+        )
 
 
 def load_smiles(smiles: list[str] | str | Path) -> list[str]:

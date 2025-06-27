@@ -39,7 +39,7 @@ def main():
 
     # Load dataset
     print("\n📦 Loading QM9 dataset (subset)...")
-    dataset = SmilesDataset.load_qm9_dataset(subset_size=1000)
+    dataset = SmilesDataset.load_qm9_dataset(max_train_samples=100)
     print(f"   Training molecules: {len(dataset.train_smiles)}")
     print(f"   Validation molecules: {len(dataset.validation_smiles)}")
 

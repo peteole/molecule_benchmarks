@@ -28,7 +28,7 @@ The QM9 dataset consists of small organic molecules with up to 9 heavy atoms (C,
    dataset = SmilesDataset.load_qm9_dataset()
 
    # Load subset for faster processing
-   dataset = SmilesDataset.load_qm9_dataset(subset_size=10000)
+   dataset = SmilesDataset.load_qm9_dataset(max_train_samples=10000)
 
 **Example molecules:**
 - ``C`` (Methane)
@@ -57,7 +57,7 @@ The Moses dataset contains drug-like molecules from the ZINC database, commonly 
    dataset = SmilesDataset.load_moses_dataset()
 
    # Load fraction for faster processing
-   dataset = SmilesDataset.load_moses_dataset(fraction=0.1)
+   dataset = SmilesDataset.load_moses_dataset(max_train_samples=1000)
 
 **Example molecules:**
 - ``Cc1ccc(cc1)S(=O)(=O)N2CCOCC2`` (Drug-like compound)
@@ -83,7 +83,7 @@ The GuacaMol dataset is designed for benchmarking molecular generation models, f
    dataset = SmilesDataset.load_guacamol_dataset()
 
    # Load fraction for memory efficiency
-   dataset = SmilesDataset.load_guacamol_dataset(fraction=0.1)
+   dataset = SmilesDataset.load_guacamol_dataset(max_train_samples=1000)
 
 Custom Datasets
 ---------------
@@ -252,7 +252,7 @@ You can analyze dataset properties:
        print(f"Average atom count: {sum(atom_counts)/len(atom_counts):.2f}")
 
    # Analyze QM9 dataset
-   dataset = SmilesDataset.load_qm9_dataset(subset_size=1000)
+   dataset = SmilesDataset.load_qm9_dataset(max_train_samples=1000)
    analyze_dataset(dataset)
 
 Best Practices
@@ -276,10 +276,10 @@ For development and testing:
 .. code-block:: python
 
    # Start with small subsets
-   dataset = SmilesDataset.load_qm9_dataset(subset_size=1000)
+   dataset = SmilesDataset.load_qm9_dataset(max_train_samples=1000)
    
    # Scale up gradually
-   dataset = SmilesDataset.load_moses_dataset(fraction=0.1)
+   dataset = SmilesDataset.load_moses_dataset(max_train_samples=10000)
 
 For production benchmarking:
 
@@ -296,28 +296,12 @@ For large datasets:
 .. code-block:: python
 
    # Load in chunks or use fractions
-   dataset = SmilesDataset.load_moses_dataset(fraction=0.5)
+   dataset = SmilesDataset.load_moses_dataset(max_train_samples=1000)
    
    # Monitor memory usage
    import psutil
    print(f"Memory usage: {psutil.virtual_memory().percent}%")
 
-Data Quality
-~~~~~~~~~~~~
-
-Ensure high-quality training data:
-
-.. code-block:: python
-
-   # Check for duplicates
-   train_set = set(dataset.train_smiles)
-   validation_set = set(dataset.validation_smiles)
-   overlap = train_set.intersection(validation_set)
-   print(f"Train/validation overlap: {len(overlap)} molecules")
-   
-   # Check for invalid molecules
-   invalid_count = len([mol for mol in dataset.get_train_molecules() if mol is None])
-   print(f"Invalid molecules: {invalid_count}")
 
 Dataset Splits
 --------------
@@ -353,35 +337,3 @@ For custom datasets, consider:
        train_smiles=train,
        validation_smiles=validation
    )
-
-Troubleshooting
----------------
-
-Common Issues
-~~~~~~~~~~~~~
-
-**Large file loading errors:**
-- Use ``fraction`` parameter to reduce memory usage
-- Check available RAM before loading large datasets
-
-**Invalid SMILES errors:**
-- Ensure SMILES strings are properly formatted
-- Check for special characters or encoding issues
-
-**Network errors during download:**
-- Check internet connection
-- Try again after a few minutes
-- Consider downloading datasets manually
-
-**Memory errors:**
-- Reduce dataset size using ``subset_size`` or ``fraction``
-- Close other applications to free memory
-- Consider using a machine with more RAM
-
-Performance Tips
-~~~~~~~~~~~~~~~~
-
-- Cache loaded datasets to avoid repeated downloads
-- Use appropriate dataset sizes for your computational resources
-- Consider using SSD storage for faster file I/O
-- Monitor memory usage when working with large datasets

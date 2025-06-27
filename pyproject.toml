@@ -1,6 +1,6 @@
 [project]
 name = "molecule-benchmarks"
-version = "0.1.2"
+version = "0.1.4"
 description = "A comprehensive benchmark suite for evaluating generative models for molecules"
 readme = "README.md"
 license = {text = "MIT"}

@@ -458,33 +458,6 @@ Example structure:
            "my_metric": my_metric_score,
        }
 
-Optimizing Performance
-~~~~~~~~~~~~~~~~~~~~~~
-
-When optimizing performance:
-
-1. **Profile the code** to identify bottlenecks
-2. **Use multiprocessing** for CPU-bound tasks
-3. **Vectorize operations** where possible
-4. **Add benchmarks** to measure improvements
-
-Example profiling:
-
-.. code-block:: python
-
-   import cProfile
-   import pstats
-
-   def profile_benchmark():
-       # Your benchmark code
-       pass
-
-   if __name__ == "__main__":
-       cProfile.run('profile_benchmark()', 'profile_stats')
-       stats = pstats.Stats('profile_stats')
-       stats.sort_stats('cumulative')
-       stats.print_stats(10)
-
 Release Process
 ---------------
 

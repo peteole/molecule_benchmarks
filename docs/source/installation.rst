@@ -76,11 +76,7 @@ Verify your installation by running:
    import molecule_benchmarks
    print(molecule_benchmarks.__version__)
 
-Or run the demo:
 
-.. code-block:: bash
-
-   molecule-benchmarks --demo
 
 GPU Support
 -----------

@@ -118,7 +118,7 @@ from molecule_benchmarks import Benchmarker, SmilesDataset
 
 # Load dataset
 print("Loading dataset...")
-dataset = SmilesDataset.load_qm9_dataset(subset_size=1000)
+dataset = SmilesDataset.load_qm9_dataset(max_train_samples=1000)
 
 # Create benchmarker
 benchmarker = Benchmarker(
@@ -171,7 +171,7 @@ from molecule_benchmarks.model import DummyMoleculeGenerationModel
 
 # Load dataset
 print("Loading dataset...")
-dataset = SmilesDataset.load_qm9_dataset(subset_size=1000)
+dataset = SmilesDataset.load_qm9_dataset(max_train_samples=1000)
 
 # Create benchmarker
 benchmarker = Benchmarker(
