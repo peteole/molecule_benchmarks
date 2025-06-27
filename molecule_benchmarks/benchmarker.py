@@ -195,16 +195,23 @@ class Benchmarker:
                 "fcd_normalized": 1.0,
                 "fcd_valid_normalized": 1.0,
             }
-        valid_generated_smiles = [
-            smiles
-            for smiles in present_smiles if is_valid_smiles(smiles)
-        ]
 
         fcd_score = get_fcd(
             present_smiles,
             self.dataset.validation_smiles,
             device=self.device,
         )
+        valid_generated_smiles = [
+            smiles
+            for smiles in present_smiles if is_valid_smiles(smiles)
+        ]
+        if len(valid_generated_smiles) == 0:
+            return {
+                "fcd": fcd_score,
+                "fcd_valid": -1,
+                "fcd_normalized": math.exp(-0.2 * fcd_score),
+                "fcd_valid_normalized": 1.0,
+            }
         fcd_valid_score = get_fcd(
             valid_generated_smiles, self.dataset.validation_smiles, device=self.device
         )
@@ -235,7 +242,7 @@ class Benchmarker:
         d_sampled = calculate_pc_descriptors(
             generated_smiles_valid, pc_descriptor_subset
         )
-        if len(generated_smiles_valid) == 0:
+        if len(d_sampled) == 0:
             return 0.0
         d_chembl = calculate_pc_descriptors(
             self.dataset.get_train_smiles(), pc_descriptor_subset
@@ -290,13 +297,13 @@ class Benchmarker:
         train_fingerprints = fingerprints(
             self.dataset.get_train_smiles(),
         )
-        present_smiles = [
-            smiles for smiles in generated_smiles if smiles is not None and smiles != ""
+        present_valid_smiles = [
+            smiles for smiles in generated_smiles if smiles is not None and is_valid_smiles(smiles)
         ]
-        if len(present_smiles) == 0:
+        if len(present_valid_smiles) == 0:
             return 0.0
         generated_fingerprints = fingerprints(
-            present_smiles
+            present_valid_smiles
         )
         return float(
             average_agg_tanimoto(

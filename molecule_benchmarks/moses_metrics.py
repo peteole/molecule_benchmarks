@@ -101,11 +101,14 @@ def fingerprints(smiles_mols_array, n_jobs=1, already_unique=False, *args, **kwa
     fps = mapper(n_jobs)(partial(fingerprint, *args, **kwargs), smiles_mols_array)
 
     length = 1
+    first_fp = None
     for fp in fps:
         if fp is not None:
             length = fp.shape[-1]
             first_fp = fp
             break
+    if first_fp is None:
+        return np.array([[]])
     fps = [
         fp if fp is not None else np.array([np.nan]).repeat(length)[None, :]
         for fp in fps

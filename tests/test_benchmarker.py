@@ -9,7 +9,7 @@ def test_benchmarker():
     ds = SmilesDataset.load_qm9_dataset(max_train_samples=10000)
     benchmarker = Benchmarker(ds, num_samples_to_generate=10000)
     # Test the benchmarker can handle only invalid SMILES
-    benchmarker.benchmark([None] * 10000)  # 10000 invalid SMILES
+    benchmarker.benchmark(["C-H-C"]*5000 + [None] * 5000)  # 10000 invalid SMILES
 
     model = DummyMoleculeGenerationModel(ds.train_smiles[:5000])
     
