@@ -1,15 +1,13 @@
 import math
 from typing import TypedDict
 from fcd import get_fcd  # type: ignore
-import moses.metrics
 from tqdm import tqdm  # type: ignore
 from rdkit import Chem
 from molecule_benchmarks.dataset import SmilesDataset, canonicalize_smiles_list
 from molecule_benchmarks.model import MoleculeGenerationModel
 from molecule_benchmarks.utils import calculate_internal_pairwise_similarities, calculate_pc_descriptors, continuous_kldiv, discrete_kldiv
 import numpy as np
-import moses
-from moses_metrics import average_agg_tanimoto, fingerprints
+from molecule_benchmarks.moses_metrics import average_agg_tanimoto, fingerprints, mapper, mol_passes_filters, internal_diversity
 
 
 class ValidityBenchmarkResults(TypedDict):
@@ -34,6 +32,14 @@ class FCDBenchmarkResults(TypedDict):
     "The normalized FCD score for the valid generated molecules, calculated as exp(-0.2 * fcd_valid)."
 
 
+class MosesBenchmarkResults(TypedDict):
+    """Moses benchmark results (see https://arxiv.org/abs/1811.12823)."""
+
+    fraction_passing_moses_filters: float
+    "Fraction of generated SMILES that pass the Moses filters (https://arxiv.org/abs/1811.12823)."
+    snn_score: float
+    "SNN score from Moses (https://arxiv.org/abs/1811.12823). In [0,1]."
+
 class BenchmarkResults(TypedDict):
     """Combined benchmark results."""
 
@@ -41,6 +47,7 @@ class BenchmarkResults(TypedDict):
     fcd: FCDBenchmarkResults
     kl_score: float
     "KL score from guacamol (https://arxiv.org/pdf/1811.09621). In [0,1]"
+    moses: MosesBenchmarkResults
 
 
 def is_valid_smiles(smiles: str) -> bool:
@@ -78,8 +85,13 @@ class Benchmarker:
         kl_score = self._compute_kl_score(generated_smiles)
         validity_results = self._compute_validity_scores(generated_smiles)
         fcd_results = self._compute_fcd_scores(generated_smiles)
+        
+        moses_results: MosesBenchmarkResults = {
+            "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(generated_smiles),
+            "snn_score": self.get_snn_score(generated_smiles),
+        }
 
-        return {"validity": validity_results, "fcd": fcd_results, "kl_score": kl_score}
+        return {"validity": validity_results, "fcd": fcd_results, "kl_score": kl_score, "moses": moses_results}
 
     def _compute_validity_scores(
         self, generated_smiles: list[str | None]
@@ -219,13 +231,16 @@ class Benchmarker:
         """Compute the SNN score for the generated SMILES."""
         train_fingerprints = fingerprints(
             self.dataset.get_train_smiles(),
-            type="morgan",
         )
         generated_fingerprints = fingerprints(
             [s for s in generated_smiles if s is not None],
-            type="morgan",
         )
         return float(average_agg_tanimoto(
             train_fingerprints, generated_fingerprints,
             device=self.device
         ))
+    
+    def get_fraction_passing_moses_filters(self, generated_smiles: list[str | None]) -> float:
+        """Compute the fraction of generated SMILES that pass the Moses filters."""
+        passes = mapper(1)(mol_passes_filters, generated_smiles)
+        return float(np.mean(passes))

@@ -34,7 +34,7 @@ class SmilesDataset:
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
-    def load_guacamol_dataset(cls):
+    def load_guacamol_dataset(cls, fraction: float = 1.0):
         """Load the Guacamole dataset."""
         train_ds_url = "https://ndownloader.figshare.com/files/13612760"
         validation_ds_url = "https://ndownloader.figshare.com/files/13612766"
@@ -42,9 +42,14 @@ class SmilesDataset:
         response = requests.get(train_ds_url)
         response.raise_for_status()
         train_smiles = response.text.splitlines()
+        random.seed(42)  # For reproducibility
+        if fraction < 1.0:
+            train_smiles = random.sample(train_smiles, int(len(train_smiles) * fraction))
         response = requests.get(validation_ds_url)
         response.raise_for_status()
         validation_smiles = response.text.splitlines()
+        if fraction < 1.0:
+            validation_smiles = random.sample(validation_smiles, int(len(validation_smiles) * fraction))
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod

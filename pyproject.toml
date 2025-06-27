@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fcd>=1.2.2",
+    "pandas>=2.3.0",
     "rdkit>=2025.3.3",
     "rdkit-stubs>=0.8",
     "requests>=2.32.4",

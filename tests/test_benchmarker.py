@@ -27,7 +27,7 @@ def test_benchmarker():
 
 def test_guacamol():
     # Test loading the Guacamole  dataset and computing FCD scores
-    dataset = SmilesDataset.load_guacamol_dataset()
+    dataset = SmilesDataset.load_guacamol_dataset(0.01)
     benchmarker = Benchmarker(dataset)
     assert isinstance(benchmarker, Benchmarker), "Failed to load Guacamole benchmarker"
     assert len(benchmarker.dataset.train_smiles) > 10, (
