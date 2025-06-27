@@ -1,6 +1,6 @@
 [project]
 name = "molecule-benchmarks"
-version = "0.1.0"
+version = "0.1.1"
 description = "A comprehensive benchmark suite for evaluating generative models for molecules"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,10 +29,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/peteole/molecule-benchmarks"
-Repository = "https://github.com/peteole/molecule-benchmarks"
-Issues = "https://github.com/peteole/molecule-benchmarks/issues"
-Documentation = "https://github.com/peteole/molecule-benchmarks#readme"
+Repository = "https://github.com/peteole/molecule_benchmarks"
+Issues = "https://github.com/peteole/molecule_benchmarks/issues"
+Documentation = "https://github.com/peteole/molecule_benchmarks#readme"
 
 [project.scripts]
 molecule-benchmarks = "molecule_benchmarks:main"
