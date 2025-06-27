@@ -94,11 +94,12 @@ class Benchmarker:
         validity_results = self._compute_validity_scores(generated_smiles)
         fcd_results = self._compute_fcd_scores(generated_smiles)
         
+        existing_generated_smiles = [s for s  in generated_smiles if s is not None]
         moses_results: MosesBenchmarkResults = {
             "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(generated_smiles),
             "snn_score": self.get_snn_score(generated_smiles),
-            "IntDiv": float(internal_diversity(generated_smiles, p=1)),
-            "IntDiv2": float(internal_diversity(generated_smiles, p=2)),
+            "IntDiv": float(internal_diversity(existing_generated_smiles, p=1)),
+            "IntDiv2": float(internal_diversity(existing_generated_smiles, p=2)),
             "scaffolds_similarity": self.compute_scaffold_similarity(generated_smiles),
             "fragment_similarity": self.compute_fragment_similarity(generated_smiles),
         }
