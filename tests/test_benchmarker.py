@@ -5,11 +5,11 @@ from molecule_benchmarks.model import DummyMoleculeGenerationModel
 
 def test_benchmarker():
     # Create a Benchmarker instance with some test SMILES
-    ds = SmilesDataset.load_qm9_dataset(subset_size=10000)
+    ds = SmilesDataset.load_qm9_dataset(max_train_samples=10000)
     benchmarker = Benchmarker(ds)
     model = DummyMoleculeGenerationModel(ds.train_smiles[:5000])
     # Test the validity score computation
-    scores = benchmarker.benchmark(model)
+    scores = benchmarker.benchmark_model(model)
     print(scores)
     validity_scores = scores["validity"]
     assert validity_scores["valid_fraction"] >= 0.99, (
