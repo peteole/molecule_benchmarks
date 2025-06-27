@@ -1,31 +1,34 @@
+import csv
 import itertools
+import multiprocessing as mp
+import random
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Optional, TypeVar
-from rdkit import Chem
+
 import requests
-import multiprocessing as mp
-from concurrent.futures import ProcessPoolExecutor
+from rdkit import Chem
 from tqdm import tqdm  # type: ignore
-import random
-import csv
+
 
 class SmilesDataset:
-    
     @classmethod
     def load_qm9_dataset(cls, subset_size: Optional[int] = None):
         """Load the QM9 dataset."""
-        ds_url = "https://huggingface.co/datasets/n0w0f/qm9-csv/resolve/main/qm9_dataset.csv"
+        ds_url = (
+            "https://huggingface.co/datasets/n0w0f/qm9-csv/resolve/main/qm9_dataset.csv"
+        )
         response = requests.get(ds_url)
         response.raise_for_status()
         smiles = []
-        
+
         reader = csv.DictReader(response.text.splitlines())
         if subset_size is not None:
             reader = itertools.islice(reader, subset_size)
 
         for row in reader:
             smiles.append(row["smiles"])  # Assuming the column name is "smiles"
-        #smiles = canonicalize_smiles_list(smiles)
+        # smiles = canonicalize_smiles_list(smiles)
         random.seed(42)  # For reproducibility
         random.shuffle(smiles)
         num_train = int(0.8 * len(smiles))
@@ -44,17 +47,22 @@ class SmilesDataset:
         train_smiles = response.text.splitlines()
         random.seed(42)  # For reproducibility
         if fraction < 1.0:
-            train_smiles = random.sample(train_smiles, int(len(train_smiles) * fraction))
+            train_smiles = random.sample(
+                train_smiles, int(len(train_smiles) * fraction)
+            )
         response = requests.get(validation_ds_url)
         response.raise_for_status()
         validation_smiles = response.text.splitlines()
         if fraction < 1.0:
-            validation_smiles = random.sample(validation_smiles, int(len(validation_smiles) * fraction))
+            validation_smiles = random.sample(
+                validation_smiles, int(len(validation_smiles) * fraction)
+            )
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
     def load_moses_dataset(cls, fraction: float = 1.0):
         """Load the Moses dataset."""
+
         def download_smiles(split: str) -> list[str]:
             """Download SMILES from a given URL split."""
             url = f"https://media.githubusercontent.com/media/molecularsets/moses/master/data/{split}.csv"
@@ -63,7 +71,9 @@ class SmilesDataset:
             csv_file = response.text.splitlines()
             if fraction < 1.0:
                 # Sample a fraction of the dataset
-                csv_file = [csv_file[0]] + random.sample(csv_file[1:], int(len(csv_file) * fraction))
+                csv_file = [csv_file[0]] + random.sample(
+                    csv_file[1:], int(len(csv_file) * fraction)
+                )
             reader = csv.DictReader(csv_file)
             smiles = [row["SMILES"] for row in reader]
             return smiles

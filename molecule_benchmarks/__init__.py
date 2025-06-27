@@ -1,8 +1,8 @@
 from molecule_benchmarks.benchmarker import Benchmarker
 from molecule_benchmarks.dataset import SmilesDataset
 from molecule_benchmarks.model import (
-    MoleculeGenerationModel,
     DummyMoleculeGenerationModel,
+    MoleculeGenerationModel,
 )
 
 __version__ = "0.1.0"

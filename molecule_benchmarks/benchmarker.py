@@ -1,13 +1,29 @@
 import math
 from typing import TypedDict
+
+import numpy as np
 from fcd import get_fcd  # type: ignore
-from tqdm import tqdm  # type: ignore
 from rdkit import Chem
+from tqdm import tqdm  # type: ignore
+
 from molecule_benchmarks.dataset import SmilesDataset, canonicalize_smiles_list
 from molecule_benchmarks.model import MoleculeGenerationModel
-from molecule_benchmarks.utils import calculate_internal_pairwise_similarities, calculate_pc_descriptors, continuous_kldiv, discrete_kldiv
-import numpy as np
-from molecule_benchmarks.moses_metrics import average_agg_tanimoto, compute_scaffolds, cos_similarity, fingerprints, mapper, mol_passes_filters, internal_diversity, compute_fragments
+from molecule_benchmarks.moses_metrics import (
+    average_agg_tanimoto,
+    compute_fragments,
+    compute_scaffolds,
+    cos_similarity,
+    fingerprints,
+    internal_diversity,
+    mapper,
+    mol_passes_filters,
+)
+from molecule_benchmarks.utils import (
+    calculate_internal_pairwise_similarities,
+    calculate_pc_descriptors,
+    continuous_kldiv,
+    discrete_kldiv,
+)
 
 
 class ValidityBenchmarkResults(TypedDict):
@@ -48,6 +64,7 @@ class MosesBenchmarkResults(TypedDict):
     fragment_similarity: float
     "Fragment similarity metric from Moses. In [0,1], higher is better."
 
+
 class BenchmarkResults(TypedDict):
     """Combined benchmark results."""
 
@@ -83,20 +100,31 @@ class Benchmarker:
         self.num_samples_to_generate = num_samples_to_generate
         self.device = device
 
-    def benchmark(self, model: MoleculeGenerationModel) -> BenchmarkResults:
+    def benchmark_model(self, model: MoleculeGenerationModel) -> BenchmarkResults:
         """Run the benchmarks on the generated SMILES."""
 
         generated_smiles = model.generate_molecules(self.num_samples_to_generate)
         if not generated_smiles:
             raise ValueError("No generated SMILES provided for benchmarking.")
+        return self.benchmark(generated_smiles)
+
+    def benchmark(self, generated_smiles: list[str | None]) -> BenchmarkResults:
+        """Run the benchmarks on the generated SMILES."""
+        if len(generated_smiles) < self.num_samples_to_generate:
+            raise ValueError(
+                f"Expected at least {self.num_samples_to_generate} generated SMILES, but got {len(generated_smiles)}."
+            )
+        generated_smiles = generated_smiles[: self.num_samples_to_generate]
         generated_smiles = canonicalize_smiles_list(generated_smiles)
         kl_score = self._compute_kl_score(generated_smiles)
         validity_results = self._compute_validity_scores(generated_smiles)
         fcd_results = self._compute_fcd_scores(generated_smiles)
-        
-        existing_generated_smiles = [s for s  in generated_smiles if s is not None]
+
+        existing_generated_smiles = [s for s in generated_smiles if s is not None]
         moses_results: MosesBenchmarkResults = {
-            "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(generated_smiles),
+            "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(
+                generated_smiles
+            ),
             "snn_score": self.get_snn_score(generated_smiles),
             "IntDiv": float(internal_diversity(existing_generated_smiles, p=1)),
             "IntDiv2": float(internal_diversity(existing_generated_smiles, p=2)),
@@ -104,7 +132,12 @@ class Benchmarker:
             "fragment_similarity": self.compute_fragment_similarity(generated_smiles),
         }
 
-        return {"validity": validity_results, "fcd": fcd_results, "kl_score": kl_score, "moses": moses_results}
+        return {
+            "validity": validity_results,
+            "fcd": fcd_results,
+            "kl_score": kl_score,
+            "moses": moses_results,
+        }
 
     def _compute_validity_scores(
         self, generated_smiles: list[str | None]
@@ -232,7 +265,7 @@ class Benchmarker:
         # kldivs['external_similarity'] = kldiv_ext
         # kldiv_sum += kldiv_ext
 
-        #metadata = {"number_samples": self.number_samples, "kl_divs": kldivs}
+        # metadata = {"number_samples": self.number_samples, "kl_divs": kldivs}
 
         # Each KL divergence value is transformed to be in [0, 1].
         # Then their average delivers the final score.
@@ -240,6 +273,7 @@ class Benchmarker:
         score = float(sum(partial_scores) / len(partial_scores))
         print("KL divergence score:", score)
         return score
+
     def get_snn_score(self, generated_smiles: list[str | None]) -> float:
         """Compute the SNN score for the generated SMILES."""
         train_fingerprints = fingerprints(
@@ -248,26 +282,33 @@ class Benchmarker:
         generated_fingerprints = fingerprints(
             [s for s in generated_smiles if s is not None],
         )
-        return float(average_agg_tanimoto(
-            train_fingerprints, generated_fingerprints,
-            device=self.device
-        ))
-    
-    def get_fraction_passing_moses_filters(self, generated_smiles: list[str | None]) -> float:
+        return float(
+            average_agg_tanimoto(
+                train_fingerprints, generated_fingerprints, device=self.device
+            )
+        )
+
+    def get_fraction_passing_moses_filters(
+        self, generated_smiles: list[str | None]
+    ) -> float:
         """Compute the fraction of generated SMILES that pass the Moses filters."""
         passes = mapper(1)(mol_passes_filters, generated_smiles)
         return float(np.mean(passes))
 
     def compute_scaffold_similarity(self, generated_smiles: list[str | None]):
         """Compute the scaffold similarity of the generated SMILES."""
-        valid_smiles = [s for s in generated_smiles if s is not None and is_valid_smiles(s)]
+        valid_smiles = [
+            s for s in generated_smiles if s is not None and is_valid_smiles(s)
+        ]
         train_scaffolds = compute_scaffolds(self.dataset.get_train_smiles())
         generated_scaffolds = compute_scaffolds(valid_smiles)
         return float(cos_similarity(train_scaffolds, generated_scaffolds))
-    
+
     def compute_fragment_similarity(self, generated_smiles: list[str | None]) -> float:
         """Compute the fragment similarity of the generated SMILES."""
-        valid_smiles = [s for s in generated_smiles if s is not None and is_valid_smiles(s)]
+        valid_smiles = [
+            s for s in generated_smiles if s is not None and is_valid_smiles(s)
+        ]
         train_fragments = compute_fragments(self.dataset.get_train_molecules())
         generated_fragments = compute_fragments(valid_smiles)
         return float(cos_similarity(train_fragments, generated_fragments))

@@ -1,6 +1,6 @@
 [project]
 name = "molecule-benchmarks"
-version = "0.1.1"
+version = "0.1.2"
 description = "A comprehensive benchmark suite for evaluating generative models for molecules"
 readme = "README.md"
 license = {text = "MIT"}
@@ -43,6 +43,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "ruff>=0.12.1",
     "types-requests>=2.32.4.20250611",
 ]
 
@@ -50,3 +51,8 @@ dev = [
 testpaths = ["tests"]
 addopts = "-s"
 python_files = ["test_*.py"]
+
+[tool.ruff]
+lint.select = ["I"]
+fix = true
+line-length = 88

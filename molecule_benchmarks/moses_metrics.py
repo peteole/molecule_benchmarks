@@ -1,16 +1,16 @@
-from functools import partial
 from collections import Counter
-import numpy as np
-import scipy
-import pandas as pd
-from rdkit import Chem
-from rdkit.Chem import MACCSkeys
-from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
-from rdkit.Chem import AllChem
-from rdkit.Chem.Scaffolds import MurckoScaffold
-import torch
+from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import scipy
+import torch
+from rdkit import Chem
+from rdkit.Chem import AllChem, MACCSkeys
+from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
+from rdkit.Chem.Scaffolds import MurckoScaffold
 from scipy.spatial.distance import cosine as cos_distance
 
 
@@ -225,7 +225,10 @@ def get_filters():
         for x in pd.concat([_mcf, _pains], sort=True)["smarts"].values
     ]
     return _filters
+
+
 _filters = get_filters()
+
 
 def mol_passes_filters(mol: Chem.Mol | str | None, allowed=None, isomericSmiles=False):
     """
@@ -279,8 +282,7 @@ def compute_scaffolds(mol_list, n_jobs=1, min_rings=2):
     """
     scaffolds = Counter()
     map_ = mapper(n_jobs)
-    scaffolds = Counter(
-        map_(partial(compute_scaffold, min_rings=min_rings), mol_list))
+    scaffolds = Counter(map_(partial(compute_scaffold, min_rings=min_rings), mol_list))
     if None in scaffolds:
         scaffolds.pop(None)
     return scaffolds
@@ -292,6 +294,7 @@ def get_n_rings(mol: Chem.Mol) -> int:
     """
     return mol.GetRingInfo().NumRings()
 
+
 def compute_scaffold(mol, min_rings=2):
     mol = get_mol(mol)
     try:
@@ -300,9 +303,10 @@ def compute_scaffold(mol, min_rings=2):
         return None
     n_rings = get_n_rings(scaffold)
     scaffold_smiles = Chem.MolToSmiles(scaffold)
-    if scaffold_smiles == '' or n_rings < min_rings:
+    if scaffold_smiles == "" or n_rings < min_rings:
         return None
     return scaffold_smiles
+
 
 def cos_similarity(ref_counts, gen_counts):
     """

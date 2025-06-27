@@ -6,9 +6,10 @@ This script demonstrates how to use the benchmark suite to evaluate
 a molecular generation model.
 """
 
+import json
+
 from molecule_benchmarks import Benchmarker, SmilesDataset
 from molecule_benchmarks.model import MoleculeGenerationModel
-import json
 
 
 class DummyMoleculeGenerationModel(MoleculeGenerationModel):
@@ -29,6 +30,7 @@ class DummyMoleculeGenerationModel(MoleculeGenerationModel):
             The complete list of predefined molecules.
         """
         return self.mols.copy()
+
 
 def main():
     """Run the demo benchmark."""
@@ -75,7 +77,7 @@ def main():
     print("\n🏃 Running benchmarks...")
     print("   This may take a few minutes...")
 
-    results = benchmarker.benchmark(model)
+    results = benchmarker.benchmark_model(model)
 
     # Display results
     print("\n📊 Benchmark Results")

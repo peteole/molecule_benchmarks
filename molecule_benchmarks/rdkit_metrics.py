@@ -1,18 +1,17 @@
 import math
-import numpy as np
-import torch
 import re
-import pandas as pd
-from tqdm import tqdm
-from torchmetrics import MeanSquaredError, MeanAbsoluteError
 
+import numpy as np
+import pandas as pd
+import torch
 from rdkit import Chem
-from rdkit.Chem.rdDistGeom import ETKDGv3, EmbedMolecule
+from rdkit.Chem.rdDistGeom import EmbedMolecule, ETKDGv3
 from rdkit.Chem.rdForceFieldHelpers import (
     MMFFHasAllMoleculeParams,
     MMFFOptimizeMolecule,
 )
-
+from torchmetrics import MeanAbsoluteError, MeanSquaredError
+from tqdm import tqdm
 
 try:
     import psi4
@@ -356,14 +355,14 @@ class BasicMolecularMetrics(object):
         nc_mu = num_components.mean() if len(num_components) > 0 else 0
         nc_min = num_components.min() if len(num_components) > 0 else 0
         nc_max = num_components.max() if len(num_components) > 0 else 0
-        print(f"Validity over {len(generated)} molecules: {validity * 100 :.2f}%")
+        print(f"Validity over {len(generated)} molecules: {validity * 100:.2f}%")
         print(
             f"Number of connected components of {len(generated)} molecules: min:{nc_min:.2f} mean:{nc_mu:.2f} max:{nc_max:.2f}"
         )
 
         relaxed_valid, relaxed_validity = self.compute_relaxed_validity(generated)
         print(
-            f"Relaxed validity over {len(generated)} molecules: {relaxed_validity * 100 :.2f}%"
+            f"Relaxed validity over {len(generated)} molecules: {relaxed_validity * 100:.2f}%"
         )
 
         cond_mae = cond_val = -1.0
@@ -373,13 +372,13 @@ class BasicMolecularMetrics(object):
         if relaxed_validity > 0:
             unique, uniqueness = self.compute_uniqueness(relaxed_valid)
             print(
-                f"Uniqueness over {len(relaxed_valid)} valid molecules: {uniqueness * 100 :.2f}%"
+                f"Uniqueness over {len(relaxed_valid)} valid molecules: {uniqueness * 100:.2f}%"
             )
 
             if self.dataset_smiles_list is not None:
                 _, novelty = self.compute_novelty(unique)
                 print(
-                    f"Novelty over {len(unique)} unique valid molecules: {novelty * 100 :.2f}%"
+                    f"Novelty over {len(unique)} unique valid molecules: {novelty * 100:.2f}%"
                 )
             else:
                 novelty = -1.0
