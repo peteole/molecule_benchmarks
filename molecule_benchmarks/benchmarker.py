@@ -1,12 +1,15 @@
 import math
 from typing import TypedDict
 from fcd import get_fcd  # type: ignore
+import moses.metrics
 from tqdm import tqdm  # type: ignore
 from rdkit import Chem
 from molecule_benchmarks.dataset import SmilesDataset, canonicalize_smiles_list
 from molecule_benchmarks.model import MoleculeGenerationModel
 from molecule_benchmarks.utils import calculate_internal_pairwise_similarities, calculate_pc_descriptors, continuous_kldiv, discrete_kldiv
 import numpy as np
+import moses
+from moses_metrics import average_agg_tanimoto, fingerprints
 
 
 class ValidityBenchmarkResults(TypedDict):
@@ -212,3 +215,17 @@ class Benchmarker:
         score = float(sum(partial_scores) / len(partial_scores))
         print("KL divergence score:", score)
         return score
+    def get_snn_score(self, generated_smiles: list[str | None]) -> float:
+        """Compute the SNN score for the generated SMILES."""
+        train_fingerprints = fingerprints(
+            self.dataset.get_train_smiles(),
+            type="morgan",
+        )
+        generated_fingerprints = fingerprints(
+            [s for s in generated_smiles if s is not None],
+            type="morgan",
+        )
+        return float(average_agg_tanimoto(
+            train_fingerprints, generated_fingerprints,
+            device=self.device
+        ))
