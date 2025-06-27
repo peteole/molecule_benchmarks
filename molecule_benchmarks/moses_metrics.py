@@ -260,12 +260,15 @@ def mol_passes_filters(mol: Chem.Mol | str | None, allowed=None, isomericSmiles=
 
 
 def internal_diversity(
-    gen, n_jobs=1, device="cpu", fp_type="morgan", gen_fps=None, p=1
+    gen: list[str | None], n_jobs=1, device="cpu", fp_type="morgan", gen_fps=None, p=1
 ):
     """
     Computes internal diversity as:
     1/|A|^2 sum_{x, y in AxA} (1-tanimoto(x, y))
     """
+    if len(gen) == 0:
+        return -1
+    
     if gen_fps is None:
         gen_fps = fingerprints(gen, fp_type=fp_type, n_jobs=n_jobs)
     return (

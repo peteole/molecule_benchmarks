@@ -71,7 +71,7 @@ class BenchmarkResults(TypedDict):
     validity: ValidityBenchmarkResults
     fcd: FCDBenchmarkResults
     kl_score: float
-    "KL score from guacamol (https://arxiv.org/pdf/1811.09621). In [0,1]"
+    "KL score from guacamol (https://arxiv.org/pdf/1811.09621). In [0,1], higher is better."
     moses: MosesBenchmarkResults
 
 
@@ -185,14 +185,23 @@ class Benchmarker:
     ) -> FCDBenchmarkResults:
         """Compute the Fréchet ChemNet Distance (FCD) scores for the generated SMILES. Removes any None-type smiles."""
         print("Computing FCD scores for the generated SMILES...")
+        present_smiles = [
+            smiles for smiles in generated_smiles if smiles is not None and smiles != ""
+        ]
+        if len(present_smiles) == 0:
+            return {
+                "fcd": -1,
+                "fcd_valid": -1,
+                "fcd_normalized": 1.0,
+                "fcd_valid_normalized": 1.0,
+            }
         valid_generated_smiles = [
             smiles
-            for smiles in generated_smiles
-            if smiles is not None and is_valid_smiles(smiles)
+            for smiles in present_smiles if is_valid_smiles(smiles)
         ]
 
         fcd_score = get_fcd(
-            [s for s in generated_smiles if s is not None],
+            present_smiles,
             self.dataset.validation_smiles,
             device=self.device,
         )
@@ -226,6 +235,8 @@ class Benchmarker:
         d_sampled = calculate_pc_descriptors(
             generated_smiles_valid, pc_descriptor_subset
         )
+        if len(generated_smiles_valid) == 0:
+            return 0.0
         d_chembl = calculate_pc_descriptors(
             self.dataset.get_train_smiles(), pc_descriptor_subset
         )
@@ -279,8 +290,13 @@ class Benchmarker:
         train_fingerprints = fingerprints(
             self.dataset.get_train_smiles(),
         )
+        present_smiles = [
+            smiles for smiles in generated_smiles if smiles is not None and smiles != ""
+        ]
+        if len(present_smiles) == 0:
+            return 0.0
         generated_fingerprints = fingerprints(
-            [s for s in generated_smiles if s is not None],
+            present_smiles
         )
         return float(
             average_agg_tanimoto(
@@ -300,6 +316,8 @@ class Benchmarker:
         valid_smiles = [
             s for s in generated_smiles if s is not None and is_valid_smiles(s)
         ]
+        if len(valid_smiles) == 0:
+            return 0.0
         train_scaffolds = compute_scaffolds(self.dataset.get_train_smiles())
         generated_scaffolds = compute_scaffolds(valid_smiles)
         return float(cos_similarity(train_scaffolds, generated_scaffolds))
@@ -309,6 +327,8 @@ class Benchmarker:
         valid_smiles = [
             s for s in generated_smiles if s is not None and is_valid_smiles(s)
         ]
+        if len(valid_smiles) == 0:
+            return 0.0
         train_fragments = compute_fragments(self.dataset.get_train_molecules())
         generated_fragments = compute_fragments(valid_smiles)
         return float(cos_similarity(train_fragments, generated_fragments))

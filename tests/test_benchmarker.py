@@ -3,11 +3,16 @@ from molecule_benchmarks.dataset import SmilesDataset
 from molecule_benchmarks.model import DummyMoleculeGenerationModel
 
 
+
 def test_benchmarker():
     # Create a Benchmarker instance with some test SMILES
     ds = SmilesDataset.load_qm9_dataset(max_train_samples=10000)
-    benchmarker = Benchmarker(ds)
+    benchmarker = Benchmarker(ds, num_samples_to_generate=10000)
+    # Test the benchmarker can handle only invalid SMILES
+    benchmarker.benchmark([None] * 10000)  # 10000 invalid SMILES
+
     model = DummyMoleculeGenerationModel(ds.train_smiles[:5000])
+    
     # Test the validity score computation
     scores = benchmarker.benchmark_model(model)
     print(scores)
