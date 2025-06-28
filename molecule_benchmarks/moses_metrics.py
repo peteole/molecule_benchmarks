@@ -1,7 +1,9 @@
+import os
 from collections import Counter
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
+from typing import Any, Callable, Iterable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -12,22 +14,7 @@ from rdkit.Chem import AllChem, MACCSkeys
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from scipy.spatial.distance import cosine as cos_distance
-
-
-class SNNMetric:
-    """
-    Computes average max similarities of gen SMILES to ref SMILES
-    """
-
-    def __init__(self, fp_type="morgan", **kwargs):
-        self.fp_type = fp_type
-        super().__init__(**kwargs)
-
-    def precalc(self, mols):
-        return {"fps": fingerprints(mols, n_jobs=self.n_jobs, fp_type=self.fp_type)}
-
-    def metric(self, pref, pgen):
-        return average_agg_tanimoto(pref["fps"], pgen["fps"], device=self.device)
+from tqdm import tqdm
 
 
 def average_agg_tanimoto(
@@ -74,7 +61,7 @@ def average_agg_tanimoto(
     return np.mean(agg_tanimoto)
 
 
-def fingerprints(smiles_mols_array, n_jobs=1, already_unique=False, *args, **kwargs):
+def fingerprints(smiles_mols_array, n_jobs=None, already_unique=False, *args, **kwargs):
     """
     Computes fingerprints of smiles np.array/list/pd.Series with n_jobs workers
     e.g.fingerprints(smiles_mols_array, type='morgan', n_jobs=10)
@@ -98,7 +85,9 @@ def fingerprints(smiles_mols_array, n_jobs=1, already_unique=False, *args, **kwa
     if not already_unique:
         smiles_mols_array, inv_index = np.unique(smiles_mols_array, return_inverse=True)
 
-    fps = mapper(n_jobs)(partial(fingerprint, *args, **kwargs), smiles_mols_array)
+    fps = mapper(n_jobs, job_name="Computing Fingerprints")(
+        partial(fingerprint, *args, **kwargs), smiles_mols_array
+    )
 
     length = 1
     first_fp = None
@@ -162,7 +151,7 @@ def fingerprint(
     return fingerprint
 
 
-def get_mol(smiles_or_mol: str | Chem.Mol | None) -> Chem.Mol | None:
+def get_mol(smiles_or_mol: str | Chem.Mol | None, sanitize=True) -> Chem.Mol | None:
     """
     Loads SMILES/molecule into RDKit's object
     """
@@ -173,32 +162,50 @@ def get_mol(smiles_or_mol: str | Chem.Mol | None) -> Chem.Mol | None:
         if mol is None:
             return None
         try:
-            Chem.SanitizeMol(mol)
+            if sanitize:
+                Chem.SanitizeMol(mol)
         except ValueError:
             return None
         return mol
     return smiles_or_mol
 
 
-def mapper(n_jobs):
+T = TypeVar("T")
+
+
+def mapper(
+    n_jobs: int | None = None,
+    job_name: str = "mapping",
+    min_length_for_parallel: int = 200,
+) -> Callable[[Callable[..., T], Iterable[Any]], list[T]]:
     """
     Returns function for map call.
     If n_jobs == 1, will use standard map
     If n_jobs > 1, will use multiprocessing pool
     If n_jobs is a pool object, will return its map function
     """
+    if n_jobs is None or n_jobs <= 0:
+        n_jobs = os.cpu_count() or 1
     if n_jobs == 1:
 
-        def _mapper(*args, **kwargs):
-            return list(map(*args, **kwargs))
+        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
+            return list(map(func, iterable))
 
         return _mapper
     if isinstance(n_jobs, int):
         pool = Pool(n_jobs)
 
-        def _mapper(*args, **kwargs):
+        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
+            # print("args=", (func, iterable))
+            len_list = len(list(iterable))
+            iterable_list = list(iterable)  # Convert to list to get length and reuse
+            if len_list <= min_length_for_parallel:
+                # If the list is small, use standard map
+                return list(map(func, iterable_list))
             try:
-                result = pool.map(*args, **kwargs)
+                result = list(
+                    tqdm(pool.imap(func, iterable_list), total=len_list, desc=job_name)
+                )
             finally:
                 pool.terminate()
             return result
@@ -207,7 +214,7 @@ def mapper(n_jobs):
     return n_jobs.map
 
 
-def fraction_passes_filters(gen, n_jobs=1):
+def fraction_passes_filters(gen, n_jobs: int | None = None):
     """
     Computes the fraction of molecules that pass filters:
     * MCF
@@ -215,7 +222,7 @@ def fraction_passes_filters(gen, n_jobs=1):
     * Only allowed atoms ('C','N','S','O','F','Cl','Br','H')
     * No charges
     """
-    passes = mapper(n_jobs)(mol_passes_filters, gen)
+    passes = mapper(n_jobs, job_name="Filtering Molecules")(mol_passes_filters, gen)
     return np.mean(passes)
 
 
@@ -271,7 +278,7 @@ def internal_diversity(
     """
     if len(gen) == 0:
         return -1
-    
+
     if gen_fps is None:
         gen_fps = fingerprints(gen, fp_type=fp_type, n_jobs=n_jobs)
     return (
@@ -282,12 +289,13 @@ def internal_diversity(
     )
 
 
-def compute_scaffolds(mol_list, n_jobs=1, min_rings=2):
+def compute_scaffolds(mol_list, n_jobs: int | None = None, min_rings=2):
     """
     Extracts a scafold from a molecule in a form of a canonic SMILES
     """
     scaffolds = Counter()
-    map_ = mapper(n_jobs)
+    map_ = mapper(job_name="Computing Scaffolds")
+    mol_list = [mol for mol in mol_list if mol is not None]  # Filter out None values
     scaffolds = Counter(map_(partial(compute_scaffold, min_rings=min_rings), mol_list))
     if None in scaffolds:
         scaffolds.pop(None)
@@ -302,8 +310,12 @@ def get_n_rings(mol: Chem.Mol) -> int:
 
 
 def compute_scaffold(mol, min_rings=2):
-    mol = get_mol(mol)
+    if mol is None:
+        return None
     try:
+        mol = get_mol(mol)
+        if mol is None:
+            return None
         scaffold = MurckoScaffold.GetScaffoldForMol(mol)
     except (ValueError, RuntimeError):
         return None
@@ -330,20 +342,23 @@ def cos_similarity(ref_counts, gen_counts):
     return 1 - cos_distance(ref_vec, gen_vec)
 
 
-def fragmenter(mol):
+def fragmenter(mol) -> list[str]:
     """
     fragment mol using BRICS and return smiles list
     """
-    fgs = AllChem.FragmentOnBRICSBonds(get_mol(mol))
+    mol = get_mol(mol)
+    if mol is None:
+        return []
+    fgs = AllChem.FragmentOnBRICSBonds(mol)
     fgs_smi = Chem.MolToSmiles(fgs).split(".")
     return fgs_smi
 
 
-def compute_fragments(mol_list, n_jobs=1):
+def compute_fragments(mol_list, n_jobs: int | None = None):
     """
     fragment list of mols using BRICS and return smiles list
     """
-    fragments = Counter()
-    for mol_frag in mapper(n_jobs)(fragmenter, mol_list):
+    fragments: Counter[str] = Counter()
+    for mol_frag in mapper(n_jobs, "Computing fragments")(fragmenter, mol_list):
         fragments.update(mol_frag)
     return fragments

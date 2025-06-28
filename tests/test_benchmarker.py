@@ -1,7 +1,8 @@
+import requests
+
 from molecule_benchmarks import Benchmarker
 from molecule_benchmarks.dataset import SmilesDataset
 from molecule_benchmarks.model import DummyMoleculeGenerationModel
-
 
 
 def test_benchmarker():
@@ -32,3 +33,37 @@ def test_benchmarker():
     assert scores["fcd"]["fcd"] < 0.3, (
         f"Expected FCD score to be low, got {scores['fcd']['fcd']}"
     )
+
+
+def _test_moses_benchmarks_match(model_name: str, run: int, benchmarker: Benchmarker):
+    """Test that Moses benchmarks match the values computed by the original implementation."""
+    metrics_url = f"https://media.githubusercontent.com/media/molecularsets/moses/refs/heads/master/data/samples/{model_name}/metrics_{model_name}_{run}.csv"
+    samples_url = f"https://media.githubusercontent.com/media/molecularsets/moses/refs/heads/master/data/samples/{model_name}/{model_name}_{run}.csv"
+
+    metrics_response = requests.get(metrics_url)
+    metrics_response.raise_for_status()
+    metrics = metrics_response.text.splitlines()
+    metrics = metrics[1:]  # Skip header
+    metrics_dict: dict[str, float] = {}
+    for line in metrics:
+        key, value = line.split(",")
+        metrics_dict[key] = float(value)
+    print(metrics_dict)  # Print metrics for debugging
+
+    samples_response = requests.get(samples_url)
+    samples_response.raise_for_status()
+    samples = samples_response.text.splitlines()
+    samples = samples[1:]  # Skip header
+    print(samples[:5])  # Print first 5 samples for debugging
+    print("Number of samples:", len(samples))
+    
+    scores = benchmarker.benchmark(samples)
+    print(scores)  # Print scores for debugging
+
+
+def test_moses_benchmarks():
+    """Test that Moses benchmarks match the values computed by the original implementation."""
+    ds = SmilesDataset.load_moses_dataset(max_train_samples=50000)
+    benchmarker = Benchmarker(ds, num_samples_to_generate=10000, device="mps")
+    # Test for model 'aae'
+    _test_moses_benchmarks_match("aae", 1, benchmarker)

@@ -1,3 +1,4 @@
+from functools import partial
 import logging
 import re
 from typing import Collection, Iterable, List, Optional, Tuple
@@ -10,6 +11,8 @@ from rdkit.ML.Descriptors import MoleculeDescriptors
 # from scipy import histogram
 from scipy.stats import entropy, gaussian_kde
 
+from molecule_benchmarks.moses_metrics import get_mol, mapper
+
 # Mute RDKit logger
 RDLogger.logger().setLevel(RDLogger.CRITICAL)
 
@@ -21,20 +24,20 @@ def remove_duplicates(smiles_list: Iterable[str | None]) -> List[str]:
     return list(set(s for s in smiles_list if s is not None))
 
 
-def is_valid(smiles: str):
-    """
-    Verifies whether a SMILES string corresponds to a valid molecule.
+# def is_valid(smiles: str):
+#     """
+#     Verifies whether a SMILES string corresponds to a valid molecule.
 
-    Args:
-        smiles: SMILES string
+#     Args:
+#         smiles: SMILES string
 
-    Returns:
-        True if the SMILES strings corresponds to a valid, non-empty molecule.
-    """
+#     Returns:
+#         True if the SMILES strings corresponds to a valid, non-empty molecule.
+#     """
 
-    mol = Chem.MolFromSmiles(smiles)
+#     mol = Chem.MolFromSmiles(smiles)
 
-    return smiles != "" and mol is not None and mol.GetNumAtoms() > 0
+#     return smiles != "" and mol is not None and mol.GetNumAtoms() > 0
 
 
 def canonicalize(smiles: str, include_stereocenters=True) -> Optional[str]:
@@ -72,10 +75,12 @@ def canonicalize_list(
     Returns:
         The canonicalized and filtered input smiles.
     """
-
-    canonicalized_smiles = [
-        canonicalize(smiles, include_stereocenters) for smiles in smiles_list
-    ]
+    canonicalized_smiles = mapper(job_name="Canonicalizing SMILES")(
+        partial(canonicalize, include_stereocenters=include_stereocenters), smiles_list
+    )
+    # canonicalized_smiles = [
+    #     canonicalize(smiles, include_stereocenters) for smiles in smiles_list
+    # ]
 
     # Remove None elements
     canonicalized_smiles = [s for s in canonicalized_smiles if s is not None]
@@ -312,13 +317,18 @@ def get_fingerprints(mols: Iterable[Chem.Mol], radius=2, length=4096):
 
 
 def get_mols(smiles_list: Iterable[str]) -> Iterable[Chem.Mol]:
-    for i in smiles_list:
-        try:
-            mol = Chem.MolFromSmiles(i)
-            if mol is not None:
-                yield mol
-        except Exception as e:
-            logger.warning(e)
+    mols = mapper(job_name="Converting SMILES to RDKit Mol")(
+        partial(get_mol, sanitize=False), smiles_list
+    )
+    mols = [mol for mol in mols if mol is not None]
+    return mols
+    # for i in smiles_list:
+    #     try:
+    #         mol = Chem.MolFromSmiles(i)
+    #         if mol is not None:
+    #             yield mol
+    #     except Exception as e:
+    #         logger.warning(e)
 
 
 def highest_tanimoto_precalc_fps(mol, fps):
@@ -367,12 +377,10 @@ def calculate_pc_descriptors(
     smiles: Iterable[str], pc_descriptors: List[str]
 ) -> np.ndarray:
     output = []
-
-    for i in smiles:
-        d = _calculate_pc_descriptors(i, pc_descriptors)
-        if d is not None:
-            output.append(d)
-
+    descriptors = mapper(job_name="Computing PC Descriptors")(
+        partial(_calculate_pc_descriptors, pc_descriptors=pc_descriptors),smiles
+    )
+    output = [d for d in descriptors if d is not None]
     return np.array(output)
 
 
@@ -414,3 +422,23 @@ def parse_molecular_formula(formula: str) -> List[Tuple[str, int]]:
         results.append((match[0], count))
 
     return results
+
+def is_valid_smiles(smiles: str|None) -> bool:
+    """Check if a SMILES string is valid."""
+    if smiles is None or not isinstance(smiles, str) or len(smiles) == 0:
+        return False
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return False
+        Chem.SanitizeMol(mol)
+        return True
+    except (Chem.rdchem.AtomValenceException, Chem.rdchem.KekulizeException):
+        return False
+
+def filter_valid_smiles(smiles_list: Iterable[str|None]) -> list[str]:
+    """Filter a list of SMILES strings to only include valid ones."""
+    valid_masks = mapper(job_name="Filtering valid SMILES")(
+        is_valid_smiles, smiles_list
+    )
+    return [s for s, valid in zip(smiles_list, valid_masks) if valid and s is not None]
