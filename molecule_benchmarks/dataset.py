@@ -8,7 +8,9 @@ from typing import Optional, TypeVar
 
 import requests
 from rdkit import Chem
-from tqdm import tqdm  # type: ignore
+from tqdm import tqdm
+
+from molecule_benchmarks.moses_metrics import mapper  # type: ignore
 
 
 class SmilesDataset:
@@ -35,11 +37,13 @@ class SmilesDataset:
         if max_train_samples is not None:
             max_train_samples = min(max_train_samples, int(len(smiles) * 0.8))
             fraction = max_train_samples / num_train_samples
-            num_train_samples =  int(max_train_samples)
+            num_train_samples = int(max_train_samples)
             num_val_samples = int(num_val_samples * fraction)
-            
+
         train_smiles = smiles[:num_train_samples]
-        validation_smiles = smiles[num_train_samples : num_train_samples + num_val_samples]
+        validation_smiles = smiles[
+            num_train_samples : num_train_samples + num_val_samples
+        ]
         return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
 
     @classmethod
@@ -120,7 +124,7 @@ class SmilesDataset:
     def get_validation_molecules(self) -> list[Chem.Mol | None]:
         """Get the validation molecules."""
         return [Chem.MolFromSmiles(s) for s in self.validation_smiles]
-    
+
     def __repr__(self) -> str:
         """String representation of the dataset."""
         return (
@@ -155,31 +159,10 @@ def _canonicalize_single_smiles(smiles: Optional[str]) -> Optional[str]:
     return None
 
 
-def canonicalize_smiles_list(smiles: list[T], n_jobs: Optional[int] = None) -> list[T]:
+def canonicalize_smiles_list(
+    smiles: list[str | None] | list[str], n_jobs: Optional[int] = None
+):
     """Canonicalize a list of SMILES strings using multiprocessing with progress tracking."""
-
-    if n_jobs is None:
-        n_jobs = mp.cpu_count()
-
-    # Handle empty list
-    if not smiles:
-        return []
-
-    # For small lists, use serial processing
-    if len(smiles) < 100:
-        return [
-            _canonicalize_single_smiles(s)  # type: ignore
-            for s in tqdm(smiles, desc="Canonicalizing SMILES")
-        ]
-
-    # Use multiprocessing for larger lists
-    with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-        results = list(
-            tqdm(
-                executor.map(_canonicalize_single_smiles, smiles),
-                total=len(smiles),
-                desc="Canonicalizing SMILES",
-            )
-        )
-
-    return results
+    return mapper(n_jobs=n_jobs, job_name="Canonicalizing SMILES")(
+        _canonicalize_single_smiles, smiles
+    )

@@ -59,11 +59,27 @@ def _test_moses_benchmarks_match(model_name: str, run: int, benchmarker: Benchma
     
     scores = benchmarker.benchmark(samples)
     print(scores)  # Print scores for debugging
+    all_scores_matched = True
+    def compare_scores(name: str, precomputed: float, actual: float, tolerance: float = 0.01):
+        distance = abs(precomputed - actual)
+        print(f"Comparing {name}: precomputed={precomputed:<.4f}, actual={actual:<.4f}, distance={distance:<.4f}")
+        if distance > tolerance:
+            print(f"Score mismatch for {name}: precomputed={precomputed}, actual={actual}")
+            all_scores_matched = False
+    
+    compare_scores("Novel fraction",metrics_dict['Novelty'],scores["validity"]["unique_and_novel_fraction"], tolerance=0.015)
+    compare_scores("Fragment similarity", metrics_dict['Frag/Test'], scores["moses"]["fragment_similarity"])
+    compare_scores("Scaffold similarity", metrics_dict['Scaf/Test'], scores["moses"]["scaffolds_similarity"])
+    compare_scores("SNN score", metrics_dict['SNN/Test'], scores["moses"]["snn_score"])
+    compare_scores("IntDiv", metrics_dict['IntDiv'], scores["moses"]["IntDiv"])
+    compare_scores("IntDiv2", metrics_dict['IntDiv2'], scores["moses"]["IntDiv2"])
+    compare_scores("Fraction passing Moses filters", metrics_dict['Filters'], scores["moses"]["fraction_passing_moses_filters"])
+    print("All scores matched:", all_scores_matched)
 
 
 def test_moses_benchmarks():
     """Test that Moses benchmarks match the values computed by the original implementation."""
-    ds = SmilesDataset.load_moses_dataset(max_train_samples=50000)
+    ds = SmilesDataset.load_moses_dataset()
     benchmarker = Benchmarker(ds, num_samples_to_generate=10000, device="mps")
     # Test for model 'aae'
     _test_moses_benchmarks_match("aae", 1, benchmarker)

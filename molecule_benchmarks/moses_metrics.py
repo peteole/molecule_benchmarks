@@ -270,7 +270,7 @@ def mol_passes_filters(mol: Chem.Mol | str | None, allowed=None, isomericSmiles=
 
 
 def internal_diversity(
-    gen: list[str | None], n_jobs=1, device="cpu", fp_type="morgan", gen_fps=None, p=1
+    gen: list[str], n_jobs=1, device="cpu", fp_type="morgan", gen_fps=None, p=1
 ):
     """
     Computes internal diversity as:
