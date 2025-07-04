@@ -138,13 +138,13 @@ class Benchmarker:
                 f"Expected at least {self.num_samples_to_generate} generated SMILES, but got {len(generated_smiles)}."
             )
         random.seed(42)  # For reproducibility
-        generated_smiles = random.sample(generated_smiles, self.num_samples_to_generate)
-        generated_smiles = canonicalize_smiles_list(generated_smiles)
-        valid_smiles = filter_valid_smiles(generated_smiles)
+        generated_smiles_subset_to_use = random.sample(generated_smiles, self.num_samples_to_generate)
+        generated_smiles_subset_to_use = canonicalize_smiles_list(generated_smiles_subset_to_use)
+        valid_smiles = filter_valid_smiles(generated_smiles_subset_to_use)
         kl_score = self._compute_kl_score(generated_smiles)
-        validity_results = self._compute_validity_scores(generated_smiles, valid_smiles)
+        validity_results = self._compute_validity_scores(generated_smiles_subset_to_use, valid_smiles)
         fcd_results = self._compute_fcd_scores(
-            generated_smiles, generated_valid_smiles=valid_smiles
+            generated_smiles_subset_to_use, generated_valid_smiles=valid_smiles
         )
         moses_results: MosesBenchmarkResults = {
             "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(
@@ -302,7 +302,7 @@ class Benchmarker:
         }
 
     def _compute_kl_score(
-        self, generated_smiles: list[str | None] | list[str]
+        self, all_generated_smiles: list[str] | list[str | None]
     ) -> float:
         """Compute the KL divergence score for the generated SMILES. Code is from guacamol:
         https://github.com/BenevolentAI/guacamol/blob/master/guacamol/distribution_learning_benchmark.py#L161"""
@@ -318,22 +318,31 @@ class Benchmarker:
             "NumAliphaticRings",
             "NumAromaticRings",
         ]
-        generated_smiles_valid = [s for s in generated_smiles if s is not None]
-        unique_molecules = set(generated_smiles_valid)
-
+        num_unique_smiles_required = 10000
+        unique_generated_smiles: set[str] = set()
+        for smiles in all_generated_smiles:
+            can_smiles = canonicalize_smiles_without_stereochemistry(smiles)
+            if can_smiles is not None:
+                unique_generated_smiles.add(can_smiles)
+            if len(unique_generated_smiles) >= num_unique_smiles_required:
+                break
+        generated_valid_smiles = list(unique_generated_smiles)
         d_sampled = calculate_pc_descriptors(
-            generated_smiles_valid, pc_descriptor_subset
+            generated_valid_smiles, pc_descriptor_subset
         )
         if len(d_sampled) == 0:
             return 0.0
 
         random.seed(42)  # For reproducibility
         # pairwise similarity
-        random_train_samples = random.sample(
+        train_smiles_to_use = random.sample(
             self.dataset.get_train_smiles(),
-            min(len(generated_smiles_valid), len(self.dataset.get_train_smiles())),
+            min(10000, len(self.dataset.get_train_smiles())),
         )
-        d_chembl = calculate_pc_descriptors(random_train_samples, pc_descriptor_subset)
+        can_train_smiles: list[str] = [canonicalize_smiles_without_stereochemistry(s) for s in train_smiles_to_use if s is not None]  # type: ignore
+        assert len(can_train_smiles) == 10000, "No valid SMILES found in training set."
+
+        d_chembl = calculate_pc_descriptors(can_train_smiles, pc_descriptor_subset)
 
         kldivs = {}
 
@@ -348,10 +357,10 @@ class Benchmarker:
         for i in range(4, 9):
             kldiv = discrete_kldiv(X_baseline=d_chembl[:, i], X_sampled=d_sampled[:, i])
             kldivs[pc_descriptor_subset[i]] = kldiv
-        chembl_sim = calculate_internal_pairwise_similarities(random_train_samples)
+        chembl_sim = calculate_internal_pairwise_similarities(can_train_smiles)
         chembl_sim = chembl_sim.max(axis=1)
 
-        sampled_sim = calculate_internal_pairwise_similarities(unique_molecules)
+        sampled_sim = calculate_internal_pairwise_similarities(generated_valid_smiles)
         sampled_sim = sampled_sim.max(axis=1)
 
         kldiv_int_int = continuous_kldiv(X_baseline=chembl_sim, X_sampled=sampled_sim)
@@ -416,3 +425,25 @@ class Benchmarker:
             print("Warning: No valid fragments found in generated SMILES.")
             return 0.0
         return float(cos_similarity(self.val_fragments, generated_fragments))
+
+
+def canonicalize_smiles_without_stereochemistry(smiles: str | None) -> str | None:
+    """
+    Canonicalize the SMILES strings with RDKit.
+
+    The algorithm is detailed under https://pubs.acs.org/doi/full/10.1021/acs.jcim.5b00543
+
+    Args:
+        smiles: SMILES string to canonicalize
+
+    Returns:
+        Canonicalized SMILES string, None if the molecule is invalid.
+    """
+    if not isinstance(smiles, str):
+        return None
+    mol = Chem.MolFromSmiles(smiles)
+
+    if mol is not None:
+        return Chem.MolToSmiles(mol, isomericSmiles=False)
+    else:
+        return None

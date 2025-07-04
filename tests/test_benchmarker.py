@@ -127,16 +127,6 @@ def get_digress_scores(smiles_name: str, benchmarker: Benchmarker):
 def test_digress_bencharks():
     # _test_digress_benchmark_match("digress_guacamol_smiles.txt")
     print("Testing DiGress benchmarks...")
-    print("Testing DiGress benchmarks for QM9 without H...")
-    ds_qm9 = SmilesDataset.load_qm9_dataset()
-    benchmarker = Benchmarker(ds_qm9, num_samples_to_generate=10000, device="mps")
-    scores = get_digress_scores("final_smiles_qm9_noH.txt", benchmarker)
-    assert abs(scores["validity"]["valid_fraction"] - 0.99) < 0.01, (
-        f"Expected valid fraction of 99% like in the original DiGress paper but got {scores['validity']['valid_fraction']}"
-    )
-    assert abs(scores["validity"]["unique_fraction"] - 0.962) < 0.01, (
-        f"Expected valid and unique fraction of 96.2% like in the original DiGress paper but got {scores['validity']['valid_and_unique_fraction']}"
-    )
 
     print("Testing DiGress benchmarks for GuacaMol...")
     ds_guacamol = SmilesDataset.load_guacamol_dataset()
@@ -156,6 +146,17 @@ def test_digress_bencharks():
     assert abs(scores["fcd"]["fcd_normalized"] - 0.68) < 0.01, (
         f"Expected FCD score of 0.68 like in the original DiGress paper but got {scores['fcd']['fcd_normalized']}"
     )
-    assert abs(scores["kl_score"] - 92.9) < 0.01, (
-        f"Expected KL score of 92.9 like in the original DiGress paper but got {scores['kl_score']}"
+    assert abs(scores["kl_score"] - 0.929) < 0.01, (
+        f"Expected KL score of 92.9% like in the original DiGress paper but got {scores['kl_score']}"
+    )
+
+    print("Testing DiGress benchmarks for QM9 without H...")
+    ds_qm9 = SmilesDataset.load_qm9_dataset()
+    benchmarker = Benchmarker(ds_qm9, num_samples_to_generate=10000, device="mps")
+    scores = get_digress_scores("final_smiles_qm9_noH.txt", benchmarker)
+    assert abs(scores["validity"]["valid_fraction"] - 0.99) < 0.01, (
+        f"Expected valid fraction of 99% like in the original DiGress paper but got {scores['validity']['valid_fraction']}"
+    )
+    assert abs(scores["validity"]["unique_fraction"] - 0.962) < 0.01, (
+        f"Expected valid and unique fraction of 96.2% like in the original DiGress paper but got {scores['validity']['valid_and_unique_fraction']}"
     )
