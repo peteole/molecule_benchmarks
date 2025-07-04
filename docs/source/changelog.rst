@@ -5,6 +5,39 @@ All notable changes to the Molecule Benchmarks package are documented here.
 
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_, and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
 
+Changelog
+=========
+
+All notable changes to the Molecule Benchmarks package are documented here.
+
+The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_, and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0.html>`_.
+
+[0.1.9] - 2025-07-04
+---------------------
+
+Changed
+~~~~~~~
+
+- Updated documentation to match current version
+- Fixed version inconsistencies across project files
+
+[0.1.8] - 2025-06-29
+---------------------
+
+Changed
+~~~~~~~
+
+- Unique fraction at 1000 benchmark metric
+- Scores now match Moses benchmark scores except for scaffold similarity
+
+[0.1.6] - 2025-06-28
+---------------------
+
+Changed
+~~~~~~~
+
+- Improved performance with multiprocessing
+
 [0.1.2] - 2025-06-27
 ---------------------
 

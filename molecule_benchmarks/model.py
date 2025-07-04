@@ -7,6 +7,7 @@ to be compatible with the benchmark suite.
 
 from abc import abstractmethod
 from typing import Protocol
+
 from tqdm import tqdm
 
 
@@ -68,7 +69,9 @@ class MoleculeGenerationModel(Protocol):
                 smiles_list.extend(batch)
                 if len(smiles_list) > num_molecules:
                     smiles_list = smiles_list[:num_molecules]
-                pbar.update(min(len(batch), num_molecules - len(smiles_list) + len(batch)))
+                pbar.update(
+                    min(len(batch), num_molecules - len(smiles_list) + len(batch))
+                )
         return smiles_list
 
 

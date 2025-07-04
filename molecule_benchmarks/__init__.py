@@ -5,7 +5,7 @@ from molecule_benchmarks.model import (
     MoleculeGenerationModel,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.9"
 __all__ = [
     "Benchmarker",
     "SmilesDataset",
@@ -18,7 +18,7 @@ def main() -> None:
     """Main entry point for the molecule-benchmarks CLI."""
     import sys
 
-    print("🧪 Molecule Benchmarks v0.1.0")
+    print("🧪 Molecule Benchmarks v0.1.9")
     print("=" * 40)
     print("A comprehensive benchmark suite for molecular generation models")
     print()

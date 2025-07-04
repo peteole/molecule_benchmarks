@@ -1,7 +1,7 @@
-# Molecule Benchmarks
+# M[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)lecule Benchmarks
 
 [![PyPI version](https://badge.fury.io/py/molecule-benchmarks.svg)](https://badge.fury.io/py/molecule-benchmarks)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A comprehensive benchmark suite for evaluating generative models for molecules. This package provides standardized metrics and evaluation protocols for assessing the quality of molecular generation models in drug discovery and cheminformatics.

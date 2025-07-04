@@ -4,7 +4,7 @@ Installation
 Requirements
 ------------
 
-* Python 3.12 or higher
+* Python 3.11 or higher
 * pip package manager
 
 
@@ -28,6 +28,7 @@ Machine Learning Dependencies
 
 * **fcd** (>=1.2.2) - Fréchet ChemNet Distance calculation
 * **torch** - PyTorch (installed with fcd)
+* **torchmetrics** (>=1.0.0) - Machine learning metrics for PyTorch
 
 Optional Dependencies
 ~~~~~~~~~~~~~~~~~~~~~

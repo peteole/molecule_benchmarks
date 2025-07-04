@@ -7,9 +7,9 @@ Welcome to Molecule Benchmarks Documentation
    :target: https://badge.fury.io/py/molecule-benchmarks
    :alt: PyPI version
 
-.. image:: https://img.shields.io/badge/python-3.12+-blue.svg
+.. image:: https://img.shields.io/badge/python-3.11+-blue.svg
    :target: https://www.python.org/downloads/
-   :alt: Python 3.12+
+   :alt: Python 3.11+
 
 .. image:: https://img.shields.io/badge/License-MIT-yellow.svg
    :target: https://opensource.org/licenses/MIT

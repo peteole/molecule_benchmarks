@@ -144,7 +144,9 @@ def load_smiles(smiles: list[str] | str | Path) -> list[str]:
         with smiles.open("r") as f:
             smiles = f.readlines()
     smiles = [s.strip() for s in smiles if s.strip()]
-    canonicalized_smiles = canonicalize_smiles_list(smiles, stochastical_test_count=10000)
+    canonicalized_smiles = canonicalize_smiles_list(
+        smiles, stochastical_test_count=10000
+    )
     # Filter out None values that couldn't be canonicalized
     return [s for s in canonicalized_smiles if s is not None]
 
@@ -182,7 +184,8 @@ def canonicalize_smiles_list(
             n_jobs=1, job_name="Testing if SMILES are already canonicalized"
         )(_canonicalize_single_smiles, sample)
         already_canonicalized = all(
-            canonicalized_sample == sample[i] for i, canonicalized_sample in enumerate(canonicalized_samples)
+            canonicalized_sample == sample[i]
+            for i, canonicalized_sample in enumerate(canonicalized_samples)
         )
         if already_canonicalized:
             return smiles

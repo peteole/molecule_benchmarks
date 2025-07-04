@@ -211,9 +211,14 @@ class Benchmarker:
             if generated_valid_smiles
             else 0.0
         )
-        
-        valid_and_unique_and_novel_fraction_of_valid_and_uniques = len(set(generated_valid_smiles) - existing) / len(set(generated_valid_smiles)) if generated_valid_smiles else 0.0
-        
+
+        valid_and_unique_and_novel_fraction_of_valid_and_uniques = (
+            len(set(generated_valid_smiles) - existing)
+            / len(set(generated_valid_smiles))
+            if generated_valid_smiles
+            else 0.0
+        )
+
         return {
             "num_molecules_generated": len(generated_smiles),
             "valid_fraction": valid_fraction,

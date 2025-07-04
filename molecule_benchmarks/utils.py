@@ -382,7 +382,7 @@ def calculate_pc_descriptors(
 ) -> np.ndarray:
     output = []
     descriptors = mapper(job_name="Computing PC Descriptors")(
-        partial(_calculate_pc_descriptors, pc_descriptors=pc_descriptors),smiles
+        partial(_calculate_pc_descriptors, pc_descriptors=pc_descriptors), smiles
     )
     output = [d for d in descriptors if d is not None]
     return np.array(output)
@@ -427,7 +427,8 @@ def parse_molecular_formula(formula: str) -> List[Tuple[str, int]]:
 
     return results
 
-def is_valid_smiles(smiles: str|None) -> bool:
+
+def is_valid_smiles(smiles: str | None) -> bool:
     """Check if a SMILES string is valid."""
     if smiles is None or not isinstance(smiles, str) or len(smiles) == 0:
         return False
@@ -440,12 +441,14 @@ def is_valid_smiles(smiles: str|None) -> bool:
     except (Chem.rdchem.AtomValenceException, Chem.rdchem.KekulizeException):
         return False
 
-def filter_valid_smiles(smiles_list: Iterable[str|None]) -> list[str]:
+
+def filter_valid_smiles(smiles_list: Iterable[str | None]) -> list[str]:
     """Filter a list of SMILES strings to only include valid ones."""
     valid_masks = mapper(job_name="Filtering valid SMILES")(
         is_valid_smiles, smiles_list
     )
     return [s for s, valid in zip(smiles_list, valid_masks) if valid and s is not None]
+
 
 def download_with_cache(
     url: str, cache_dir: str | Path = "cache", filename: Optional[str] = None
@@ -466,8 +469,8 @@ def download_with_cache(
         os.makedirs(cache_dir)
 
     if filename is None:
-        hash_val=hashlib.md5(url.encode()).hexdigest()
-        #print(f"hash for url {url}:",hash_val)
+        hash_val = hashlib.md5(url.encode()).hexdigest()
+        # print(f"hash for url {url}:",hash_val)
         filename = f"{hash_val}_{os.path.basename(url)}"
 
     filepath = os.path.join(cache_dir, filename)
@@ -481,6 +484,5 @@ def download_with_cache(
         content = f.read()
         if not content.strip():
             raise ValueError(f"Downloaded file {filepath} is empty.")
-        
+
         return content
-    
