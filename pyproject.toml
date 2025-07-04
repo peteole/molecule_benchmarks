@@ -1,6 +1,6 @@
 [project]
 name = "molecule-benchmarks"
-version = "0.1.8"
+version = "0.1.9"
 description = "A comprehensive benchmark suite for evaluating generative models for molecules"
 readme = "README.md"
 license = {text = "MIT"}
@@ -13,11 +13,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "fcd>=1.2.2",
     "pandas>=2.3.0",

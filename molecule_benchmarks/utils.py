@@ -1,9 +1,13 @@
-from functools import partial
+import hashlib
 import logging
+import os
 import re
+from functools import partial
+from pathlib import Path
 from typing import Collection, Iterable, List, Optional, Tuple
 
 import numpy as np
+import requests
 from rdkit import Chem, DataStructs, RDLogger
 from rdkit.Chem import AllChem
 from rdkit.ML.Descriptors import MoleculeDescriptors
@@ -442,3 +446,41 @@ def filter_valid_smiles(smiles_list: Iterable[str|None]) -> list[str]:
         is_valid_smiles, smiles_list
     )
     return [s for s, valid in zip(smiles_list, valid_masks) if valid and s is not None]
+
+def download_with_cache(
+    url: str, cache_dir: str | Path = "cache", filename: Optional[str] = None
+) -> str:
+    """
+    Download a file from a URL and cache it locally.
+
+    Args:
+        url: URL to download the file from
+        cache_dir: Directory to store the cached file
+        filename: Optional filename to save the file as. If not provided, it will be derived from the URL.
+
+    Returns:
+        Path to the downloaded file.
+    """
+
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+    if filename is None:
+        hash_val=hashlib.md5(url.encode()).hexdigest()
+        #print(f"hash for url {url}:",hash_val)
+        filename = f"{hash_val}_{os.path.basename(url)}"
+
+    filepath = os.path.join(cache_dir, filename)
+
+    if not os.path.exists(filepath):
+        response = requests.get(url)
+        response.raise_for_status()
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+    with open(filepath, "r") as f:
+        content = f.read()
+        if not content.strip():
+            raise ValueError(f"Downloaded file {filepath} is empty.")
+        
+        return content
+    

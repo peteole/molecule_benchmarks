@@ -35,12 +35,27 @@ from molecule_benchmarks.utils import (
 
 class ValidityBenchmarkResults(TypedDict):
     num_molecules_generated: int
+    "Number of molecules that have been evaluated"
     valid_fraction: float
+    "Fraction of molecules that is valid according to rdkit sanitization"
     valid_and_unique_fraction: float
+    "Number of unique valid molecules divided by the total number of generated molecules."
     unique_fraction: float
+    "Number of unique molecules divided by the total number of generated molecules."
     unique_fraction_at_1000: float
+    "Number of unique molecules in the first 1000 generated molecules divided by 1000. -1 if less than 1000 molecules were generated."
+    unique_fraction_of_valids: float
+    "Number of unique valid molecules divided by the total number of valid generated molecules."
+    unique_fraction_of_valids_at_1000: float
+    "Number of unique valid molecules in the first 1000 generated molecules divided by 1000. -1 if less than 1000 molecules were generated."
     unique_and_novel_fraction: float
+    "Number of unique and novel molecules divided by the total number of generated molecules."
+    unique_and_novel_fraction_of_valids: float
+    "Number of unique and novel valid molecules divided by the total number of valid generated molecules."
     valid_and_unique_and_novel_fraction: float
+    "Number of valid, unique, and novel molecules divided by the total number of generated molecules."
+    valid_and_unique_and_novel_fraction_of_valid_and_uniques: float
+    "Number of valid, unique, and novel molecules divided by the total number of valid and unique generated molecules."
 
 
 class FCDBenchmarkResults(TypedDict):
@@ -83,10 +98,6 @@ class BenchmarkResults(TypedDict):
     moses: MosesBenchmarkResults
 
 
-
-
-
-
 class Benchmarker:
     """Benchmarker for evaluating molecule generation models."""
 
@@ -101,7 +112,7 @@ class Benchmarker:
         self.device = device
         print("Precomputing validation set statistics...")
         self.val_mu, self.val_sigma = self._compute_fcd_mu_sigma(
-            self.dataset.get_validation_smiles(), max_samples=num_samples_to_generate
+            self.dataset.get_validation_smiles(), max_samples=50000
         )
         self.val_fingerprints_morgan = fingerprints(
             self.dataset.get_validation_smiles(),
@@ -118,18 +129,23 @@ class Benchmarker:
             raise ValueError("No generated SMILES provided for benchmarking.")
         return self.benchmark(generated_smiles)
 
-    def benchmark(self, generated_smiles: list[str | None]) -> BenchmarkResults:
+    def benchmark(
+        self, generated_smiles: list[str | None] | list[str]
+    ) -> BenchmarkResults:
         """Run the benchmarks on the generated SMILES."""
         if len(generated_smiles) < self.num_samples_to_generate:
             raise ValueError(
                 f"Expected at least {self.num_samples_to_generate} generated SMILES, but got {len(generated_smiles)}."
             )
-        generated_smiles = generated_smiles[: self.num_samples_to_generate]
+        random.seed(42)  # For reproducibility
+        generated_smiles = random.sample(generated_smiles, self.num_samples_to_generate)
         generated_smiles = canonicalize_smiles_list(generated_smiles)
         valid_smiles = filter_valid_smiles(generated_smiles)
         kl_score = self._compute_kl_score(generated_smiles)
         validity_results = self._compute_validity_scores(generated_smiles, valid_smiles)
-        fcd_results = self._compute_fcd_scores(generated_smiles, generated_valid_smiles=valid_smiles)
+        fcd_results = self._compute_fcd_scores(
+            generated_smiles, generated_valid_smiles=valid_smiles
+        )
         moses_results: MosesBenchmarkResults = {
             "fraction_passing_moses_filters": self.get_fraction_passing_moses_filters(
                 valid_smiles
@@ -149,19 +165,29 @@ class Benchmarker:
         }
 
     def _compute_validity_scores(
-        self, generated_smiles: list[str | None], generated_valid_smiles: list[str]
+        self,
+        generated_smiles: list[str | None] | list[str],
+        generated_valid_smiles: list[str],
     ) -> ValidityBenchmarkResults:
-        unique: set[str|None] = set(generated_smiles)
+        unique: set[str | None] = set(generated_smiles)
         existing = set(self.dataset.train_smiles)
         valid_and_unique_fraction = (
-            len(set(generated_valid_smiles)) / len(generated_smiles) if generated_smiles else 0.0
+            len(set(generated_valid_smiles)) / len(generated_smiles)
+            if generated_smiles
+            else 0.0
         )
-        valid_fraction = len(generated_valid_smiles) / len(generated_smiles) if generated_smiles else 0.0
+        valid_fraction = (
+            len(generated_valid_smiles) / len(generated_smiles)
+            if generated_smiles
+            else 0.0
+        )
         unique_fraction = (
             len(unique) / len(generated_smiles) if generated_smiles else 0.0
         )
         unique_at_1000 = set(generated_smiles[:1000])
-        unique_fraction_at_1000 = len(unique_at_1000) / 1000 if len(generated_smiles) >= 1000 else -1
+        unique_fraction_at_1000 = (
+            len(unique_at_1000) / 1000 if len(generated_smiles) >= 1000 else -1
+        )
         unique_and_novel_fraction = (
             len(unique - existing) / len(generated_smiles) if generated_smiles else 0.0
         )
@@ -170,6 +196,24 @@ class Benchmarker:
             if generated_smiles
             else 0.0
         )
+        unique_fraction_of_valids = (
+            len(set(generated_valid_smiles)) / len(generated_valid_smiles)
+            if generated_valid_smiles
+            else 0.0
+        )
+        unique_fraction_of_valids_at_1000 = (
+            len(set(generated_valid_smiles[:1000])) / 1000
+            if len(generated_valid_smiles) >= 1000
+            else -1
+        )
+        unique_and_novel_fraction_of_valids = (
+            len(set(generated_valid_smiles) - existing) / len(generated_valid_smiles)
+            if generated_valid_smiles
+            else 0.0
+        )
+        
+        valid_and_unique_and_novel_fraction_of_valid_and_uniques = len(set(generated_valid_smiles) - existing) / len(set(generated_valid_smiles)) if generated_valid_smiles else 0.0
+        
         return {
             "num_molecules_generated": len(generated_smiles),
             "valid_fraction": valid_fraction,
@@ -178,25 +222,34 @@ class Benchmarker:
             "unique_fraction_at_1000": unique_fraction_at_1000,
             "unique_and_novel_fraction": unique_and_novel_fraction,
             "valid_and_unique_and_novel_fraction": valid_and_unique_and_novel_fraction,
+            "unique_fraction_of_valids": unique_fraction_of_valids,
+            "unique_and_novel_fraction_of_valids": unique_and_novel_fraction_of_valids,
+            "unique_fraction_of_valids_at_1000": unique_fraction_of_valids_at_1000,
+            "valid_and_unique_and_novel_fraction_of_valid_and_uniques": valid_and_unique_and_novel_fraction_of_valid_and_uniques,
         }
+
     def _compute_fcd_mu_sigma(
         self, present_smiles: list[str], max_samples: int = 10000
     ) -> tuple[np.ndarray, np.ndarray]:
         if len(present_smiles) == 0:
             raise ValueError("No valid SMILES provided for FCD computation.")
         random.seed(42)  # For reproducibility
-        smiles_to_use = random.sample(present_smiles, min(len(present_smiles), max_samples))
-        print(f"Computing FCD mu and sigma with {len(smiles_to_use)} / {len(present_smiles)} samples")
-        model = load_ref_model()
-        chemnet_activations = get_predictions(
-            model, smiles_to_use, device=self.device
+        smiles_to_use = random.sample(
+            present_smiles, min(len(present_smiles), max_samples)
         )
-        mu=np.mean(chemnet_activations, axis=0)
-        sigma=np.cov(chemnet_activations.T)
+        print(
+            f"Computing FCD mu and sigma with {len(smiles_to_use)} / {len(present_smiles)} samples"
+        )
+        model = load_ref_model()
+        chemnet_activations = get_predictions(model, smiles_to_use, device=self.device)
+        mu = np.mean(chemnet_activations, axis=0)
+        sigma = np.cov(chemnet_activations.T)
         return mu, sigma
 
     def _compute_fcd_scores(
-        self, generated_smiles: list[str | None], generated_valid_smiles: list[str]
+        self,
+        generated_smiles: list[str | None] | list[str],
+        generated_valid_smiles: list[str],
     ) -> FCDBenchmarkResults:
         """Compute the Fréchet ChemNet Distance (FCD) scores for the generated SMILES. Removes any None-type smiles."""
         print("Computing FCD scores for the generated SMILES...")
@@ -213,7 +266,7 @@ class Benchmarker:
         mu, sigma = self._compute_fcd_mu_sigma(
             present_smiles, max_samples=self.num_samples_to_generate
         )
-        
+
         fcd_score = calculate_frechet_distance(
             mu1=mu,
             sigma1=sigma,
@@ -243,7 +296,9 @@ class Benchmarker:
             "fcd_valid_normalized": math.exp(-0.2 * fcd_valid_score),
         }
 
-    def _compute_kl_score(self, generated_smiles: list[str | None]) -> float:
+    def _compute_kl_score(
+        self, generated_smiles: list[str | None] | list[str]
+    ) -> float:
         """Compute the KL divergence score for the generated SMILES. Code is from guacamol:
         https://github.com/BenevolentAI/guacamol/blob/master/guacamol/distribution_learning_benchmark.py#L161"""
         print("Computing KL divergence score for the generated SMILES...")
@@ -266,15 +321,14 @@ class Benchmarker:
         )
         if len(d_sampled) == 0:
             return 0.0
-        
+
         random.seed(42)  # For reproducibility
         # pairwise similarity
         random_train_samples = random.sample(
-            self.dataset.get_train_smiles(), min(len(generated_smiles_valid), len(self.dataset.get_train_smiles()))
+            self.dataset.get_train_smiles(),
+            min(len(generated_smiles_valid), len(self.dataset.get_train_smiles())),
         )
-        d_chembl = calculate_pc_descriptors(
-            random_train_samples, pc_descriptor_subset
-        )
+        d_chembl = calculate_pc_descriptors(random_train_samples, pc_descriptor_subset)
 
         kldivs = {}
 
@@ -289,9 +343,7 @@ class Benchmarker:
         for i in range(4, 9):
             kldiv = discrete_kldiv(X_baseline=d_chembl[:, i], X_sampled=d_sampled[:, i])
             kldivs[pc_descriptor_subset[i]] = kldiv
-        chembl_sim = calculate_internal_pairwise_similarities(
-            random_train_samples
-        )
+        chembl_sim = calculate_internal_pairwise_similarities(random_train_samples)
         chembl_sim = chembl_sim.max(axis=1)
 
         sampled_sim = calculate_internal_pairwise_similarities(unique_molecules)
@@ -317,14 +369,12 @@ class Benchmarker:
         print("KL divergence score:", score)
         return score
 
-    def get_snn_score(self, generated_valid_smiles: list[str ]) -> float:
+    def get_snn_score(self, generated_valid_smiles: list[str]) -> float:
         """Compute the SNN score for the generated SMILES."""
         if len(generated_valid_smiles) == 0:
             return 0.0
-        
-        generated_fingerprints = fingerprints(
-            generated_valid_smiles, fp_type="morgan"
-        )
+
+        generated_fingerprints = fingerprints(generated_valid_smiles, fp_type="morgan")
         return float(
             average_agg_tanimoto(
                 self.val_fingerprints_morgan, generated_fingerprints, device=self.device
@@ -335,7 +385,9 @@ class Benchmarker:
         self, generated_valid_smiles: list[str]
     ) -> float:
         """Compute the fraction of generated SMILES that pass the Moses filters."""
-        passes = mapper(job_name="Moses filters")(mol_passes_filters, generated_valid_smiles)
+        passes = mapper(job_name="Moses filters")(
+            mol_passes_filters, generated_valid_smiles
+        )
         return float(np.mean(passes))
 
     def compute_scaffold_similarity(self, generated_valid_smiles: list[str]):
@@ -350,9 +402,12 @@ class Benchmarker:
 
     def compute_fragment_similarity(self, generated_valid_smiles: list[str]) -> float:
         """Compute the fragment similarity of the generated SMILES."""
-        #valid_smiles = filter_valid_smiles(generated_smiles)
+        # valid_smiles = filter_valid_smiles(generated_smiles)
         # if len(generated_smiles) == 0:
         #     return 0.0
-        
+
         generated_fragments = compute_fragments(generated_valid_smiles)
+        if len(generated_fragments) == 0:
+            print("Warning: No valid fragments found in generated SMILES.")
+            return 0.0
         return float(cos_similarity(self.val_fragments, generated_fragments))
