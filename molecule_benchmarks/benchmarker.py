@@ -1,5 +1,8 @@
+import hashlib
 import math
+import pickle
 import random
+from pathlib import Path
 from typing import TypedDict
 
 import numpy as np
@@ -99,17 +102,50 @@ class BenchmarkResults(TypedDict):
 
 
 class Benchmarker:
-    """Benchmarker for evaluating molecule generation models."""
+    """Benchmarker for evaluating molecule generation models.
+    
+    This class provides comprehensive benchmarking capabilities for molecule generation models,
+    including validity metrics, FCD scores, KL divergence, and Moses metrics.
+    
+    The benchmarker can optionally cache expensive validation set statistics (FCD mu/sigma,
+    fingerprints, scaffolds, and fragments) to disk for faster subsequent runs with the same dataset.
+    Caching can be disabled by setting cache_dir=None.
+    """
 
     def __init__(
         self,
         dataset: SmilesDataset,
         num_samples_to_generate: int = 10000,
         device: str = "cpu",
+        cache_dir: str | Path | None = "data",
     ) -> None:
         self.dataset = dataset
         self.num_samples_to_generate = num_samples_to_generate
         self.device = device
+        self.cache_dir = Path(cache_dir) if cache_dir is not None else None
+
+        # Try to load from cache first if caching is enabled
+        if self.cache_dir is not None:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_key = self._generate_dataset_hash()
+            cache_path = self.cache_dir / f"benchmarker_cache_{cache_key}.pkl"
+
+            if cache_path.exists():
+                print(f"Loading cached validation set statistics from {cache_path}")
+                try:
+                    cached_data = self._load_cache(cache_path)
+                    self.val_mu = cached_data["val_mu"]
+                    self.val_sigma = cached_data["val_sigma"]
+                    self.val_fingerprints_morgan = cached_data[
+                        "val_fingerprints_morgan"
+                    ]
+                    self.val_scaffolds = cached_data["val_scaffolds"]
+                    self.val_fragments = cached_data["val_fragments"]
+                    print("Successfully loaded cached validation set statistics.")
+                    return
+                except Exception as e:
+                    print(f"Failed to load cache: {e}. Recomputing...")
+
         print("Precomputing validation set statistics...")
         self.val_mu, self.val_sigma = self._compute_fcd_mu_sigma(
             self.dataset.get_validation_smiles(), max_samples=50000
@@ -120,6 +156,69 @@ class Benchmarker:
         )
         self.val_scaffolds = compute_scaffolds(self.dataset.get_validation_smiles())
         self.val_fragments = compute_fragments(self.dataset.get_validation_smiles())
+
+        # Save to cache if caching is enabled
+        if self.cache_dir is not None:
+            cache_key = self._generate_dataset_hash()
+            cache_path = self.cache_dir / f"benchmarker_cache_{cache_key}.pkl"
+            cache_data = {
+                "val_mu": self.val_mu,
+                "val_sigma": self.val_sigma,
+                "val_fingerprints_morgan": self.val_fingerprints_morgan,
+                "val_scaffolds": self.val_scaffolds,
+                "val_fragments": self.val_fragments,
+                "dataset_hash": cache_key,
+            }
+            self._save_cache(cache_data, cache_path)
+            print(f"Cached validation set statistics to {cache_path}")
+
+    def _generate_dataset_hash(self) -> str:
+        """Generate a hash of the dataset for cache key."""
+        # Import version locally to avoid circular import issues
+        try:
+            from molecule_benchmarks import __version__
+        except ImportError:
+            __version__ = "unknown"
+        
+        # Create a hash based on validation SMILES to ensure we're using the right cache
+        validation_smiles = self.dataset.get_validation_smiles()
+        train_smiles = self.dataset.get_train_smiles()
+
+        # Sort the SMILES to ensure consistent hash regardless of order
+        validation_smiles_sorted = sorted(validation_smiles)
+        train_smiles_sorted = sorted(train_smiles)
+
+        # Create a string representation of the dataset including package version
+        dataset_string = f"v{__version__}_train:{len(train_smiles_sorted)}:{hash(tuple(train_smiles_sorted[:1000]))}"
+        dataset_string += f"_val:{len(validation_smiles_sorted)}:{hash(tuple(validation_smiles_sorted[:1000]))}"
+        # Generate SHA256 hash
+        return hashlib.sha256(dataset_string.encode()).hexdigest()[:16]
+
+    def _save_cache(self, cache_data: dict, cache_path: Path) -> None:
+        """Save cache data to disk."""
+        try:
+            with open(cache_path, "wb") as f:
+                pickle.dump(cache_data, f)
+        except Exception as e:
+            print(f"Warning: Failed to save cache: {e}")
+
+    def _load_cache(self, cache_path: Path) -> dict:
+        """Load cache data from disk."""
+        with open(cache_path, "rb") as f:
+            cache_data = pickle.load(f)
+
+        # Verify the cache is for the correct dataset
+        if "dataset_hash" not in cache_data:
+            raise ValueError("Cache file is missing dataset hash")
+
+        expected_hash = self._generate_dataset_hash()
+        if cache_data["dataset_hash"] != expected_hash:
+            raise ValueError(
+                f"Cache dataset hash mismatch. Expected {expected_hash}, "
+                f"got {cache_data['dataset_hash']}"
+            )
+
+        return cache_data
 
     def benchmark_model(self, model: MoleculeGenerationModel) -> BenchmarkResults:
         """Run the benchmarks on the generated SMILES."""
@@ -138,11 +237,17 @@ class Benchmarker:
                 f"Expected at least {self.num_samples_to_generate} generated SMILES, but got {len(generated_smiles)}."
             )
         random.seed(42)  # For reproducibility
-        generated_smiles_subset_to_use = random.sample(generated_smiles, self.num_samples_to_generate)
-        generated_smiles_subset_to_use = canonicalize_smiles_list(generated_smiles_subset_to_use)
+        generated_smiles_subset_to_use = random.sample(
+            generated_smiles, self.num_samples_to_generate
+        )
+        generated_smiles_subset_to_use = canonicalize_smiles_list(
+            generated_smiles_subset_to_use
+        )
         valid_smiles = filter_valid_smiles(generated_smiles_subset_to_use)
         kl_score = self._compute_kl_score(generated_smiles)
-        validity_results = self._compute_validity_scores(generated_smiles_subset_to_use, valid_smiles)
+        validity_results = self._compute_validity_scores(
+            generated_smiles_subset_to_use, valid_smiles
+        )
         fcd_results = self._compute_fcd_scores(
             generated_smiles_subset_to_use, generated_valid_smiles=valid_smiles
         )
@@ -339,7 +444,12 @@ class Benchmarker:
             self.dataset.get_train_smiles(),
             min(10000, len(self.dataset.get_train_smiles())),
         )
-        can_train_smiles: list[str] = [canonicalize_smiles_without_stereochemistry(s) for s in train_smiles_to_use if s is not None]  # type: ignore
+        can_train_smiles_temp = [
+            canonicalize_smiles_without_stereochemistry(s)
+            for s in train_smiles_to_use
+            if s is not None
+        ]
+        can_train_smiles: list[str] = [s for s in can_train_smiles_temp if s is not None]
         assert len(can_train_smiles) == 10000, "No valid SMILES found in training set."
 
         d_chembl = calculate_pc_descriptors(can_train_smiles, pc_descriptor_subset)

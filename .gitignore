@@ -11,3 +11,4 @@ wheels/
 **/.DS_Store
 .env
 data/
+cache_demo/benchmarker_cache_4647f77fa15e2fa8.pkl
