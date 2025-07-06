@@ -27,6 +27,7 @@ dependencies = [
     "scipy>=1.16.0",
     "tqdm>=4.67.1",
     "torchmetrics>=1.0.0",
+    "psutil>=7.0.0",
 ]
 
 [project.urls]
@@ -59,6 +60,6 @@ addopts = "-s"
 python_files = ["test_*.py"]
 
 [tool.ruff]
-lint.select = ["I"]
+lint.select = ["F", "I"]
 fix = true
 line-length = 88

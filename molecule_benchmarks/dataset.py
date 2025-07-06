@@ -1,17 +1,11 @@
 import csv
-import itertools
-import multiprocessing as mp
 import random
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Optional, TypeVar
 
-import requests
 from rdkit import Chem
-from tqdm import tqdm
 
-from molecule_benchmarks.moses_metrics import mapper  # type: ignore
-from molecule_benchmarks.utils import download_with_cache
+from molecule_benchmarks.utils import download_with_cache, mapper
 
 
 class SmilesDataset:

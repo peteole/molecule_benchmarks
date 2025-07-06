@@ -9,7 +9,6 @@ from fcd import (  # type: ignore
     load_ref_model,
 )
 from rdkit import Chem
-from tqdm import tqdm  # type: ignore
 
 from molecule_benchmarks.dataset import SmilesDataset, canonicalize_smiles_list
 from molecule_benchmarks.model import MoleculeGenerationModel
@@ -20,7 +19,6 @@ from molecule_benchmarks.moses_metrics import (
     cos_similarity,
     fingerprints,
     internal_diversity,
-    mapper,
     mol_passes_filters,
 )
 from molecule_benchmarks.utils import (
@@ -29,7 +27,7 @@ from molecule_benchmarks.utils import (
     continuous_kldiv,
     discrete_kldiv,
     filter_valid_smiles,
-    is_valid_smiles,
+    mapper,
 )
 
 

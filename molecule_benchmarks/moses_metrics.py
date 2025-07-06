@@ -1,9 +1,6 @@
-import os
 from collections import Counter
 from functools import partial
-from multiprocessing import Pool
 from pathlib import Path
-from typing import Any, Callable, Iterable, TypeVar, Union
 
 import numpy as np
 import pandas as pd
@@ -14,7 +11,8 @@ from rdkit.Chem import AllChem, MACCSkeys
 from rdkit.Chem.AllChem import GetMorganFingerprintAsBitVect as Morgan
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from scipy.spatial.distance import cosine as cos_distance
-from tqdm import tqdm
+
+from molecule_benchmarks.utils import get_mol, mapper
 
 
 def average_agg_tanimoto(
@@ -151,67 +149,6 @@ def fingerprint(
     return fingerprint
 
 
-def get_mol(smiles_or_mol: str | Chem.Mol | None, sanitize=True) -> Chem.Mol | None:
-    """
-    Loads SMILES/molecule into RDKit's object
-    """
-    if isinstance(smiles_or_mol, str):
-        if len(smiles_or_mol) == 0:
-            return None
-        mol = Chem.MolFromSmiles(smiles_or_mol)
-        if mol is None:
-            return None
-        try:
-            if sanitize:
-                Chem.SanitizeMol(mol)
-        except ValueError:
-            return None
-        return mol
-    return smiles_or_mol
-
-
-T = TypeVar("T")
-
-
-def mapper(
-    n_jobs: int | None = None,
-    job_name: str = "mapping",
-    min_length_for_parallel: int = 200,
-) -> Callable[[Callable[..., T], Iterable[Any]], list[T]]:
-    """
-    Returns function for map call.
-    If n_jobs == 1, will use standard map
-    If n_jobs > 1, will use multiprocessing pool
-    If n_jobs is a pool object, will return its map function
-    """
-    if n_jobs is None or n_jobs <= 0:
-        n_jobs = os.cpu_count() or 1
-    if n_jobs == 1:
-
-        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
-            return list(map(func, iterable))
-
-        return _mapper
-    if isinstance(n_jobs, int):
-        pool = Pool(n_jobs)
-
-        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
-            # print("args=", (func, iterable))
-            len_list = len(list(iterable))
-            iterable_list = list(iterable)  # Convert to list to get length and reuse
-            if len_list <= min_length_for_parallel:
-                # If the list is small, use standard map
-                return list(map(func, iterable_list))
-            try:
-                result = list(
-                    tqdm(pool.imap(func, iterable_list), total=len_list, desc=job_name)
-                )
-            finally:
-                pool.terminate()
-            return result
-
-        return _mapper
-    return n_jobs.map
 
 
 def fraction_passes_filters(gen, n_jobs: int | None = None):

@@ -1,12 +1,15 @@
 import hashlib
 import logging
+import multiprocessing as mp
 import os
 import re
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Collection, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Collection, Iterable, List, Optional, Tuple, TypeVar
 
 import numpy as np
+import psutil
 import requests
 from rdkit import Chem, DataStructs, RDLogger
 from rdkit.Chem import AllChem
@@ -14,8 +17,7 @@ from rdkit.ML.Descriptors import MoleculeDescriptors
 
 # from scipy import histogram
 from scipy.stats import entropy, gaussian_kde
-
-from molecule_benchmarks.moses_metrics import get_mol, mapper
+from tqdm import tqdm
 
 # Mute RDKit logger
 RDLogger.logger().setLevel(RDLogger.CRITICAL)
@@ -486,3 +488,100 @@ def download_with_cache(
             raise ValueError(f"Downloaded file {filepath} is empty.")
 
         return content
+
+def available_cpu_count():
+    # 1. Slurm-aware (allocated CPUs)
+    slurm_cpus = os.environ.get("SLURM_CPUS_ON_NODE") or os.environ.get(
+        "SLURM_CPUS_PER_TASK"
+    )
+    if slurm_cpus:
+        return int(slurm_cpus)
+
+    # 2. Respect CPU affinity if psutil is available
+    try:
+        process = psutil.Process()
+        if hasattr(process, "cpu_affinity"):
+            # psutil.cpu_count() returns the number of logical CPUs
+            # cpu_affinity() returns the CPUs that the process is allowed to run on
+            # We return the length of the CPU affinity list
+            affinity = process.cpu_affinity()
+            if affinity:
+                return len(affinity)
+    except Exception:
+        pass
+
+    # 3. Try Python 3.9+'s os.sched_getaffinity (Linux only)
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+
+    # 4. Fall back to all visible CPUs (may overcount on clusters)
+    return os.cpu_count() or 1  # fallback to 1 if os.cpu_count() returns None
+
+T = TypeVar("T")
+
+def mapper(
+    n_jobs: int | None = None,
+    job_name: str = "mapping",
+    min_length_for_parallel: int = 1000,
+) -> Callable[[Callable[..., T], Iterable[Any]], list[T]]:
+    """
+    Returns function for map call.
+    If n_jobs == 1, will use standard map
+    If n_jobs > 1, will use multiprocessing pool
+    If n_jobs is a pool object, will return its map function
+    """
+    if n_jobs is None or n_jobs <= 0:
+        n_jobs = available_cpu_count()
+    # print(f"Using {n_jobs} jobs for {job_name}...")
+    if n_jobs == 1:
+
+        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
+            iterable_list = list(iterable)  # Convert to list to get length and reuse
+            return list(
+                tqdm(
+                    map(func, iterable_list),
+                    total=len(iterable_list),
+                    desc=job_name,
+                )
+            )
+
+        return _mapper
+    if isinstance(n_jobs, int):
+        pool = ProcessPoolExecutor(n_jobs, mp_context=mp.get_context("spawn"))
+
+        def _mapper(func: Callable[..., T], iterable: Iterable[Any]) -> list[T]:
+            # print("args=", (func, iterable))
+            len_list = len(list(iterable))
+            iterable_list = list(iterable)  # Convert to list to get length and reuse
+            if len_list <= min_length_for_parallel:
+                # If the list is small, use standard map
+                return list(tqdm(map(func, iterable_list), total=len_list, desc=job_name))
+            try:
+                result = list(
+                    tqdm(pool.map(func, iterable_list), total=len_list, desc=f"{job_name} ({n_jobs} jobs)")
+                )
+            finally:
+                pool.shutdown(wait=True)
+            return result
+
+        return _mapper
+    return n_jobs.map
+
+
+def get_mol(smiles_or_mol: str | Chem.Mol | None, sanitize=True) -> Chem.Mol | None:
+    """
+    Loads SMILES/molecule into RDKit's object
+    """
+    if isinstance(smiles_or_mol, str):
+        if len(smiles_or_mol) == 0:
+            return None
+        mol = Chem.MolFromSmiles(smiles_or_mol)
+        if mol is None:
+            return None
+        try:
+            if sanitize:
+                Chem.SanitizeMol(mol)
+        except ValueError:
+            return None
+        return mol
+    return smiles_or_mol
