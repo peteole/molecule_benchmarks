@@ -49,7 +49,7 @@ class SmilesDataset:
         validation_smiles = smiles[
             num_train_samples : num_train_samples + num_val_samples
         ]
-        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles, name=f"qm9_num_train_samples={max_train_samples}")
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             with open(cache_path, "wb") as f:
@@ -84,7 +84,8 @@ class SmilesDataset:
             validation_smiles = random.sample(
                 validation_smiles, int(len(validation_smiles) * fraction)
             )
-        ds= cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds= cls(train_smiles=train_smiles, validation_smiles=validation_smiles, name=f"guacamol_num_train_samples={max_train_samples}")
+         # cache the dataset
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             with open(cache_path, "wb") as f:
@@ -124,7 +125,7 @@ class SmilesDataset:
             validation_smiles = random.sample(
                 validation_smiles, int(len(validation_smiles) * fraction)
             )
-        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles, name=f"moses_num_train_samples={max_train_samples}")
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             with open(cache_path, "wb") as f:
