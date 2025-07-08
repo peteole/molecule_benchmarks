@@ -1,4 +1,5 @@
 import csv
+import pickle
 import random
 from pathlib import Path
 from typing import Optional, TypeVar
@@ -11,9 +12,17 @@ from molecule_benchmarks.utils import download_with_cache, mapper
 class SmilesDataset:
     @classmethod
     def load_qm9_dataset(
-        cls, max_train_samples: Optional[int] = None, cache_dir: str | Path = "data"
+        cls,
+        max_train_samples: Optional[int] = None,
+        cache_dir: str | Path | None = None,
     ):
         """Load the QM9 dataset."""
+        cache_path = None
+        if cache_dir is not None:
+            cache_path = Path(cache_dir) / f"qm9_num_samples={max_train_samples}.pkl"
+            if cache_path.exists():
+                with open(cache_path, "rb") as f:
+                    return pickle.load(f)
         ds_url = (
             "https://huggingface.co/datasets/n0w0f/qm9-csv/resolve/main/qm9_dataset.csv"
         )
@@ -40,13 +49,26 @@ class SmilesDataset:
         validation_smiles = smiles[
             num_train_samples : num_train_samples + num_val_samples
         ]
-        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "wb") as f:
+                pickle.dump(ds, f)
+        return ds
 
     @classmethod
     def load_guacamol_dataset(
-        cls, max_train_samples: Optional[int] = None, cache_dir: str | Path = "data"
+        cls,
+        max_train_samples: Optional[int] = None,
+        cache_dir: str | Path | None = None,
     ):
         """Load the Guacamole dataset."""
+        cache_path = None
+        if cache_dir is not None:
+            cache_path = Path(cache_dir) / f"guacamol_num_samples={max_train_samples}.pkl"
+            if cache_path.exists():
+                with open(cache_path, "rb") as f:
+                    return pickle.load(f)
         train_ds_url = "https://ndownloader.figshare.com/files/13612760"
         validation_ds_url = "https://ndownloader.figshare.com/files/13612766"
         # download the dataset into memory
@@ -62,13 +84,26 @@ class SmilesDataset:
             validation_smiles = random.sample(
                 validation_smiles, int(len(validation_smiles) * fraction)
             )
-        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds= cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "wb") as f:
+                pickle.dump(ds, f)
+        return ds
 
     @classmethod
     def load_moses_dataset(
-        cls, max_train_samples: Optional[int] = None, cache_dir: str | Path = "data"
+        cls,
+        max_train_samples: Optional[int] = None,
+        cache_dir: str | Path | None = None,
     ):
+        cache_path = None
         """Load the Moses dataset."""
+        if cache_dir is not None:
+            cache_path = Path(cache_dir) / f"moses_num_samples={max_train_samples}.pkl"
+            if cache_path.exists():
+                with open(cache_path, "rb") as f:
+                    return pickle.load(f)
 
         def download_smiles(split: str) -> list[str]:
             """Download SMILES from a given URL split."""
@@ -89,7 +124,12 @@ class SmilesDataset:
             validation_smiles = random.sample(
                 validation_smiles, int(len(validation_smiles) * fraction)
             )
-        return cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        ds = cls(train_smiles=train_smiles, validation_smiles=validation_smiles)
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_path, "wb") as f:
+                pickle.dump(ds, f)
+        return ds
 
     @classmethod
     def load_dummy_dataset(cls):
@@ -100,11 +140,20 @@ class SmilesDataset:
 
     def __init__(
         self,
-        train_smiles: list[str] | Path | str,
-        validation_smiles: list[str] | Path | str,
+        train_smiles: list[str],
+        validation_smiles: list[str],
+        canonicalize: bool = True,
+        name: Optional[str] = None,
     ) -> None:
-        self.train_smiles = load_smiles(train_smiles)
-        self.validation_smiles = load_smiles(validation_smiles)
+        self.train_smiles: list[str] = (
+            canonicalize_smiles_list(train_smiles) if canonicalize else train_smiles
+        )  # type: ignore
+        self.validation_smiles: list[str] = (
+            canonicalize_smiles_list(validation_smiles)
+            if canonicalize
+            else validation_smiles
+        )  # type: ignore
+        self.name = name
 
     def get_train_smiles(self) -> list[str]:
         """Get the training SMILES."""
@@ -130,24 +179,6 @@ class SmilesDataset:
         )
 
 
-def load_smiles(smiles: list[str] | str | Path) -> list[str]:
-    """Load SMILES from a file or a list. Canonicalizes the SMILES strings."""
-    if isinstance(smiles, str):
-        smiles = Path(smiles)
-    if isinstance(smiles, Path):
-        with smiles.open("r") as f:
-            smiles = f.readlines()
-    smiles = [s.strip() for s in smiles if s.strip()]
-    canonicalized_smiles = canonicalize_smiles_list(
-        smiles, stochastical_test_count=10000
-    )
-    # Filter out None values that couldn't be canonicalized
-    return [s for s in canonicalized_smiles if s is not None]
-
-
-T = TypeVar("T", str, Optional[str])
-
-
 def _canonicalize_single_smiles(smiles: Optional[str]) -> Optional[str]:
     """Helper function to canonicalize a single SMILES string for multiprocessing."""
     if smiles is not None:
@@ -161,28 +192,14 @@ def _canonicalize_single_smiles(smiles: Optional[str]) -> Optional[str]:
 def canonicalize_smiles_list(
     smiles: list[str | None] | list[str],
     n_jobs: Optional[int] = None,
-    stochastical_test_count: int | None = None,
 ):
     """Canonicalize a list of SMILES strings using multiprocessing with progress tracking.
     Args:
         smiles (list[str | None] | list[str]): List of SMILES strings to canonicalize.
         n_jobs (Optional[int]): Number of parallel jobs to run. If None, uses all available cores.
-        stochastical_test_count (int | None): If provided, will sample this many elements from the list and test if they are cannonicalized already. If they are, the original smiles will be returned, assuming they are already canonicalized.
     Returns:
         list[str | None]: List of canonicalized SMILES strings, with None for invalid SMILES.
     """
-    if stochastical_test_count is not None and len(smiles) > stochastical_test_count:
-        # Sample a subset of the list to test if they are already canonicalized
-        sample = random.sample(smiles, stochastical_test_count)
-        canonicalized_samples = mapper(
-            n_jobs=1, job_name="Testing if SMILES are already canonicalized"
-        )(_canonicalize_single_smiles, sample)
-        already_canonicalized = all(
-            canonicalized_sample == sample[i]
-            for i, canonicalized_sample in enumerate(canonicalized_samples)
-        )
-        if already_canonicalized:
-            return smiles
     return mapper(n_jobs=n_jobs, job_name="Canonicalizing SMILES")(
         _canonicalize_single_smiles, smiles
     )

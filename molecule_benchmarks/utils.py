@@ -453,7 +453,7 @@ def filter_valid_smiles(smiles_list: Iterable[str | None]) -> list[str]:
 
 
 def download_with_cache(
-    url: str, cache_dir: str | Path = "cache", filename: Optional[str] = None
+    url: str, cache_dir: str | Path | None = None, filename: Optional[str] = None
 ) -> str:
     """
     Download a file from a URL and cache it locally.
@@ -466,6 +466,13 @@ def download_with_cache(
     Returns:
         Path to the downloaded file.
     """
+    if cache_dir is None:
+        response = requests.get(url)
+        response.raise_for_status()
+        content = response.text
+        if not content.strip():
+            raise ValueError(f"Downloaded file from {url} is empty.")
+        return content
 
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
