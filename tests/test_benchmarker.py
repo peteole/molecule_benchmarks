@@ -1,7 +1,15 @@
+import torch
+
 from molecule_benchmarks import Benchmarker
 from molecule_benchmarks.dataset import SmilesDataset
 from molecule_benchmarks.model import DummyMoleculeGenerationModel
 from molecule_benchmarks.utils import download_with_cache
+
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
 
 
 def test_benchmarker():
@@ -106,7 +114,7 @@ def _test_moses_benchmarks_match(model_name: str, run: int, benchmarker: Benchma
 def test_moses_benchmarks():
     """Test that Moses benchmarks match the values computed by the original implementation."""
     ds = SmilesDataset.load_moses_dataset()
-    benchmarker = Benchmarker(ds, num_samples_to_generate=30000, device="mps")
+    benchmarker = Benchmarker(ds, num_samples_to_generate=30000, device=device)
     # Test for model 'aae'
     for seed in [1]:
         for model in ["vae", "aae", "char_rnn"]:
@@ -130,7 +138,7 @@ def test_digress_bencharks():
 
     print("Testing DiGress benchmarks for GuacaMol...")
     ds_guacamol = SmilesDataset.load_guacamol_dataset()
-    benchmarker = Benchmarker(ds_guacamol, num_samples_to_generate=10000, device="mps")
+    benchmarker = Benchmarker(ds_guacamol, num_samples_to_generate=10000, device=device)
     scores = get_digress_scores("digress_guacamol_smiles.txt", benchmarker)
     assert abs(scores["validity"]["valid_fraction"] - 0.852) < 0.01, (
         f"Expected valid fraction of 85.2% like in the original DiGress paper but got {scores['validity']['valid_fraction']}"
@@ -152,11 +160,32 @@ def test_digress_bencharks():
 
     print("Testing DiGress benchmarks for QM9 without H...")
     ds_qm9 = SmilesDataset.load_qm9_dataset()
-    benchmarker = Benchmarker(ds_qm9, num_samples_to_generate=10000, device="mps")
+    benchmarker = Benchmarker(ds_qm9, num_samples_to_generate=10000, device=device)
     scores = get_digress_scores("final_smiles_qm9_noH.txt", benchmarker)
     assert abs(scores["validity"]["valid_fraction"] - 0.99) < 0.01, (
         f"Expected valid fraction of 99% like in the original DiGress paper but got {scores['validity']['valid_fraction']}"
     )
     assert abs(scores["validity"]["unique_fraction"] - 0.962) < 0.01, (
         f"Expected valid and unique fraction of 96.2% like in the original DiGress paper but got {scores['validity']['valid_and_unique_fraction']}"
+    )
+    
+def test_moses_benchmarker_on_train():
+    ds = SmilesDataset.load_moses_dataset()
+    benchmarker = Benchmarker(ds, num_samples_to_generate=15000, device=device)
+    results = benchmarker.benchmark(ds.train_smiles)
+    print(results)
+    assert results["validity"]["valid_fraction"] > 0.99, (
+        f"Expected valid fraction of almost 100% but got {results['validity']['valid_fraction']}"
+    )
+    assert results["validity"]["unique_fraction"] > 0.99, (
+        f"Expected unique fraction of almost 100% but got {results['validity']['unique_fraction']}"
+    )
+    assert results["validity"]["valid_and_unique_fraction"] > 0.99, (
+        f"Expected valid and unique fraction of almost 100% but got {results['validity']['valid_and_unique_fraction']}"
+    )
+    assert results["validity"]["unique_and_novel_fraction"] < 0.01, (
+        f"Expected unique and novel fraction to be low, got {results['validity']['unique_and_novel_fraction']}"
+    )
+    assert results["fcd"]["fcd"] < 0.5, (
+        f"Expected FCD score to be low, got {results['fcd']['fcd']}"
     )
